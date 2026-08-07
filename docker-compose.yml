@@ -1,0 +1,25 @@
+# Quarry VRC - self-hosted HackerOne research console.
+# Code is baked into the image; all mutable state lives on named volumes so `docker compose pull`
+# upgrades the image without touching your data.
+
+services:
+  quarry:
+    build: .
+    # Or, once images are published:  image: ghcr.io/skraft9/quarry-vrc:latest
+    container_name: quarry-vrc
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "${QUARRY_PORT:-8443}:8443"        # HTTPS console
+    volumes:
+      - quarry-data:/data                  # config.json, index.db (+ FTS), TLS certs
+      - quarry-workspace:/workspace        # your leads / reports markdown - the source of truth
+      - quarry-payloads:/payloads          # the payload library (cloned reference + your own)
+    # Uncomment to bring files from your host instead of (or alongside) the UI:
+    #   - /path/to/my/workspace:/workspace
+    #   - /path/to/my/payloads:/payloads
+
+volumes:
+  quarry-data:
+  quarry-workspace:
+  quarry-payloads:

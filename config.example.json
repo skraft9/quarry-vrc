@@ -1,0 +1,40 @@
+{
+  "app_name": "Quarry",
+
+  "bind_host": "127.0.0.1",
+  "bind_port": 8443,
+
+  "allow_remote": [
+    "127.0.0.1/32"
+  ],
+
+  "db_path": "index.db",
+  "session_hours": 0,
+  "min_password_length": 12,
+
+  "browse_roots": [
+    { "label": "home", "path": "/home/YOU" },
+    { "label": "arsenal", "path": "/home/YOU/arsenal/PayloadsAllTheThings" }
+  ],
+
+  "payloads_root": "/home/YOU/arsenal/PayloadsAllTheThings",
+
+  "browse_max_bytes": 2000000,
+
+  "browse_deny_globs": [
+    "*.pem", "*.key", "*.p12", "*.pfx", "*.jks", "*.keystore",
+    "id_rsa*", "id_ecdsa*", "id_ed25519*",
+    "*.gpg", "*.kdbx",
+    ".ssh/*", "*/.ssh/*",
+    ".aws/*", "*/.aws/*",
+    "*credentials*",
+    ".netrc", "*/.netrc",
+    "*.env",
+    "*/.git/config",
+    "config.json", "secrets.json",
+    "*.srl",
+    "index.db", "index.db-*", "*.sqlite", "*.sqlite3"
+  ],
+
+  "users": {}
+}

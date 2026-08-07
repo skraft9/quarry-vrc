@@ -1,0 +1,38 @@
+# Quarry VRC - never commit an operator's secrets, credentials, data or research.
+# The public repo ships EMPTY. Everything below is generated or brought by the user at runtime.
+
+# Secrets and config
+.env
+config.json
+secrets.json
+tls/
+*.pem
+*.key
+*.crt
+
+# Data (lives on Docker volumes at runtime, never in git)
+data/
+index.db
+index.db-*
+*.sqlite
+uploads/
+
+# The operator's research workspaces and payloads (bring-your-own, never shipped)
+workspace/
+payloads/
+vulns_*/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Editors / OS
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# Operator-private denylist for the leak scanner (never commit)
+.private-denylist

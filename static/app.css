@@ -1,0 +1,2370 @@
+/* huntplatform - app.css
+   Vanilla CSS. No imports, no external fonts, no images. Light + dark via
+   prefers-color-scheme, overridable by [data-theme] on <html>. */
+
+/* ------------------------------------------------------------------ theme */
+:root {
+  --bg:        #f4f6f8;
+  --bg-sunk:   #eaedf1;
+  --panel:     #ffffff;
+  --panel-2:   #f7f9fb;
+  --line:      #d8dee6;
+  --line-soft: #e6eaf0;
+  --text:      #1a2029;
+  --text-dim:  #5d6b7d;
+  --text-mute: #8a97a7;
+  --accent:    #1a5fd0;
+  --accent-bg: #e5eeff;
+  --accent-fg: #ffffff;
+  --ok:        #1a7f45;
+  --ok-bg:     #e2f5e9;
+  --warn:      #9a6100;
+  --warn-bg:   #fdf0d5;
+  --danger:    #bf2626;
+  --danger-bg: #fce8e8;
+  --info:      #1560a8;
+  --info-bg:   #e2eefb;
+  --ready:     #6d28d9;
+  --ready-bg:  #ede9fe;
+  /* `awarded`: the one terminal GOOD outcome. GOLD rather than a second green, because --ok is
+     already `submitted` on Leads and `resolved` on the Tracker, the two states sit next to each
+     other in every list that renders the vocabulary in lifecycle order, and "sent" versus "paid"
+     is the exact distinction the status exists to draw - two greens would blur it. Gold's warm
+     neighbour is `open`'s amber, four chips away and meaning something unrelated, so it is pushed
+     yellow (hue ~50) rather than orange to hold the two apart. Violet is `ready` and does not
+     collide with either.
+
+     Known tension, decided rather than missed: .awardbadge - money landed on a REPORT - is green,
+     so the Tracker says money in green and the Leads tab says paid in gold. The Tracker never
+     draws a lead status, and the pair that DO share a row is submitted/awarded, so the collision
+     worth avoiding is the one on Leads. */
+  --award:     #7d6a08;
+  --award-bg:  #f8f2c8;
+  /* HackerOne's own state palette, for the `Reports by state` bars only, so a bar means the same
+     thing here as the badge does on H1 itself. Properties rather than literals because these are
+     solid fills on a sunken track and no single hex reads on both backgrounds, and because every
+     one of them then has to be declared in ALL THREE theme blocks - see the --ready note in the
+     [data-theme="dark"] block for what happens when one is not. Listed in lifecycle order, which
+     is also REPORT_STATES order and so the order the bars are drawn in.
+
+     not-applicable is RED (user correction 2026-08-03), which is HackerOne's own treatment and
+     separates it from the rest of the closed-without-action group. It is the one closure that says
+     the report was WRONG rather than late or already known, so it earns a hue the others do not.
+
+     spam alone rides informative's grey, one step DIMMER, because it carries less meaning than any
+     other outcome. The ramp fades toward the background in both themes - lighter in light, darker
+     in dark - so "dimmer" survives the theme flip. */
+  --h1-new:                    #7e22ce;
+  --h1-pending-program-review: #1d4ed8;
+  --h1-triaged:                #ea580c;
+  --h1-retesting:              #c8a200;
+  --h1-resolved:               #17803d;
+  --h1-duplicate:              #96603a;
+  --h1-informative:            #8f9aab;
+  --h1-not-applicable:         #bf2626;
+  --h1-spam:                   #b3bcc8;
+  --h1-new-bg:                  #f0e4f9;
+  --h1-pending-program-review-bg: #e4eafa;
+  --h1-triaged-bg:              #fcebe2;
+  --h1-retesting-bg:            #f8f4e0;
+  --h1-resolved-bg:             #e3f0e8;
+  --h1-duplicate-bg:            #f2ece7;
+  --h1-informative-bg:          #f2f3f5;
+  --h1-not-applicable-bg:       #f7e5e5;
+  --h1-spam-bg:                 #f6f7f8;
+  --shadow:    0 1px 2px rgba(16,24,40,.06), 0 4px 14px rgba(16,24,40,.06);
+  --focus:     #1a5fd0;
+  --topbar-h:  52px;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg:        #0d1117;
+    --bg-sunk:   #090c11;
+    --panel:     #141a22;
+    --panel-2:   #1a212b;
+    --line:      #262f3c;
+    --line-soft: #1f2732;
+    --text:      #dbe3ee;
+    --text-dim:  #97a4b6;
+    --text-mute: #6d7a8c;
+    --accent:    #5b9bff;
+    --accent-bg: #16243c;
+    --accent-fg: #08111f;
+    --ok:        #52c47f;
+    --ok-bg:     #10281a;
+    --warn:      #e5a53a;
+    --warn-bg:   #2e2210;
+    --danger:    #f2665f;
+    --danger-bg: #331617;
+    --info:      #63b0f5;
+    --info-bg:   #10263a;
+    --ready:     #a78bfa;
+    --ready-bg:  #241a3d;
+    --award:     #edcb5e;
+    --award-bg:  #2c2810;
+    /* Same nine states, lifted for a near-black track: the light values are picked to sit on
+       #eaedf1 and go muddy on #090c11. */
+    --h1-new:                    #c084fc;
+    --h1-pending-program-review: #3b82f6;
+    --h1-triaged:                #fb923c;
+    --h1-retesting:              #fde047;
+    --h1-resolved:               #4ade80;
+    --h1-duplicate:              #b98358;
+    --h1-informative:            #8b97a8;
+    --h1-not-applicable:         #f2665f;
+    --h1-spam:                   #646f80;
+    --h1-new-bg:                  #282239;
+    --h1-pending-program-review-bg: #132138;
+    --h1-triaged-bg:              #31241a;
+    --h1-retesting-bg:            #32301c;
+    --h1-resolved-bg:             #153025;
+    --h1-duplicate-bg:            #27221f;
+    --h1-informative-bg:          #1f252c;
+    --h1-not-applicable-bg:       #301d20;
+    --h1-spam-bg:                 #191e25;
+    --shadow:    0 1px 2px rgba(0,0,0,.4), 0 6px 18px rgba(0,0,0,.35);
+    --focus:     #7db1ff;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg:        #0d1117;
+  --bg-sunk:   #090c11;
+  --panel:     #141a22;
+  --panel-2:   #1a212b;
+  --line:      #262f3c;
+  --line-soft: #1f2732;
+  --text:      #dbe3ee;
+  --text-dim:  #97a4b6;
+  --text-mute: #6d7a8c;
+  --accent:    #5b9bff;
+  --accent-bg: #16243c;
+  --accent-fg: #08111f;
+  --ok:        #52c47f;
+  --ok-bg:     #10281a;
+  --warn:      #e5a53a;
+  --warn-bg:   #2e2210;
+  --danger:    #f2665f;
+  --danger-bg: #331617;
+  --info:      #63b0f5;
+  --info-bg:   #10263a;
+  /* This block is the EXPLICIT dark theme, chosen by the toggle rather than by the OS, so it has
+     to redeclare every colour the media block does. --ready was declared ONLY in the media block
+     for its whole life, so anyone forcing dark on a light-preference machine got a violet picked
+     for a white panel, on a dark one. test_smoke.py now walks every custom property a status rule
+     reads and fails if any of them is missing from either dark block. */
+  --ready:     #a78bfa;
+  --ready-bg:  #241a3d;
+  --award:     #edcb5e;
+  --award-bg:  #2c2810;
+  --h1-new:                    #c084fc;
+  --h1-pending-program-review: #3b82f6;
+  --h1-triaged:                #fb923c;
+  --h1-retesting:              #fde047;
+  --h1-resolved:               #4ade80;
+  --h1-duplicate:              #b98358;
+  --h1-informative:            #8b97a8;
+  --h1-not-applicable:         #f2665f;
+  --h1-spam:                   #646f80;
+  --h1-new-bg:                  #282239;
+  --h1-pending-program-review-bg: #132138;
+  --h1-triaged-bg:              #31241a;
+  --h1-retesting-bg:            #32301c;
+  --h1-resolved-bg:             #153025;
+  --h1-duplicate-bg:            #27221f;
+  --h1-informative-bg:          #1f252c;
+  --h1-not-applicable-bg:       #301d20;
+  --h1-spam-bg:                 #191e25;
+  --shadow:    0 1px 2px rgba(0,0,0,.4), 0 6px 18px rgba(0,0,0,.35);
+  --focus:     #7db1ff;
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+/* ------------------------------------------------------------------ base */
+*, *::before, *::after { box-sizing: border-box; }
+
+/* The `hidden` attribute is only `display:none` in the UA stylesheet, so ANY author rule that
+   sets `display` on the same element wins and the element stays visible. .boot/.login/.app all
+   set display (grid/grid/flex), which left the boot overlay (z-index 60) permanently covering
+   the page. Every show/hide path in app.js toggles `hidden`, so this rule is load-bearing. */
+[hidden] { display: none !important; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-text-size-adjust: 100%;
+}
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+code, pre, .mono { font-family: var(--mono); }
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* ------------------------------------------------------------------ boot */
+.boot {
+  position: fixed; inset: 0; display: grid; place-items: center;
+  background: var(--bg); z-index: 60;
+}
+.boot-inner { text-align: center; color: var(--text-dim); }
+.spinner {
+  width: 22px; height: 22px; margin: 0 auto 12px;
+  border: 2px solid var(--line);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2s; } }
+
+/* ------------------------------------------------------------------ login */
+.login {
+  position: fixed; inset: 0; z-index: 50;
+  display: grid; place-items: center; padding: 20px;
+  background: var(--bg-sunk);
+}
+.login-card { width: 100%; max-width: 380px; padding: 26px; }
+.login-title { margin: 0 0 4px; font-size: 20px; letter-spacing: -.01em; }
+.login-sub { margin: 0 0 20px; color: var(--text-dim); font-size: 13px; }
+.login-foot { margin: 16px 0 0; color: var(--text-mute); font-size: 11.5px; text-align: center; }
+.login-foot code { font-size: 11px; }
+
+/* ------------------------------------------------------------------ shell */
+.app { min-height: 100vh; display: flex; flex-direction: column; }
+
+.topbar {
+  position: sticky; top: 0; z-index: 30;
+  height: var(--topbar-h);
+  display: flex; align-items: center; gap: 12px;
+  padding: 0 14px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+.brand { display: flex; align-items: center; gap: 8px; color: var(--text); font-weight: 650; letter-spacing: -.01em; }
+.brand:hover { text-decoration: none; }
+.brand-mark {
+  display: inline-flex; width: 19px; height: 19px; flex: none;
+  color: var(--accent);
+}
+.brand-mark svg { width: 100%; height: 100%; display: block; }
+/* The facets are what make it read as a cut stone rather than an arrow, and they are the first
+   thing to disappear at this size, so they carry slightly more weight than the outline. */
+.brand-mark svg path + path { opacity: .8; }
+.brand:hover .brand-mark { color: var(--accent); filter: brightness(1.15); }
+.brand-text { white-space: nowrap; }
+
+.globalsearch { flex: 1; display: flex; gap: 6px; min-width: 0; max-width: 560px; margin: 0 auto; }
+.globalsearch input { flex: 1; min-width: 0; }
+
+.topbar-right { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.userchip {
+  font-size: 12px; color: var(--text-dim);
+  padding: 3px 9px; border: 1px solid var(--line); border-radius: 999px;
+  white-space: nowrap; max-width: 220px; overflow: hidden; text-overflow: ellipsis;
+}
+
+.shell {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 168px minmax(0, 1fr);
+  align-items: start;
+}
+
+.sidebar {
+  position: sticky; top: var(--topbar-h);
+  height: calc(100vh - var(--topbar-h));
+  overflow-y: auto; overflow-x: hidden;
+  padding: 12px 8px;
+  background: var(--panel);
+  border-right: 1px solid var(--line);
+  display: flex; flex-direction: column; gap: 2px;
+}
+
+/* --- collapsible sidebar ---------------------------------------------------
+   The width lives on .shell's grid track, so one class transition moves the rail
+   and reflows the content together instead of the sidebar sliding over it. */
+.shell { transition: grid-template-columns 260ms cubic-bezier(.4, 0, .2, 1); }
+.shell.nav-collapsed { grid-template-columns: 54px minmax(0, 1fr); }
+
+.nav-toggle {
+  align-self: flex-end; flex: none;
+  width: 28px; height: 28px; margin-bottom: 6px;
+  display: grid; place-items: center;
+  background: transparent; border: 1px solid transparent; border-radius: 6px;
+  color: var(--text-mute); cursor: pointer;
+  transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+.nav-toggle:hover { background: var(--panel-2); color: var(--text); border-color: var(--line); }
+.nav-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.shell.nav-collapsed .nav-toggle { align-self: center; }
+
+/* A chevron drawn from two borders: no icon font, no SVG, no network request. */
+.nav-chevron {
+  width: 7px; height: 7px;
+  border-left: 2px solid currentColor; border-bottom: 2px solid currentColor;
+  transform: rotate(45deg); margin-left: 3px;
+  transition: transform 260ms cubic-bezier(.4, 0, .2, 1);
+}
+.shell.nav-collapsed .nav-chevron { transform: rotate(-135deg); margin-left: -3px; }
+
+/* Labels fade out ahead of the rail closing, so text is never sliced by the edge.
+   Two things made this look squished rather than smooth.
+
+   First, .navtext was a shrinkable flex item. As the grid track narrowed, the label was
+   compressed by the flex algorithm and the gap collapsed, jamming the label into the icon
+   before the fade had finished. flex: none stops it participating: it keeps its natural width
+   and is clipped by the rail instead of being squeezed inside it.
+
+   Second, one symmetric transition served both directions. Collapsing wants the text gone
+   FAST, before the rail eats it. Expanding wants it to wait until the rail has opened, or it
+   fades in on top of a track still too narrow to hold it. So the two directions get different
+   durations and different delays. */
+.navtext {
+  flex: none; overflow: hidden; white-space: nowrap;
+  max-width: 132px; opacity: 1; visibility: visible;
+  transition: opacity 130ms ease 140ms,
+              max-width 220ms cubic-bezier(.4, 0, .2, 1) 90ms,
+              visibility 0s 90ms;
+}
+.shell.nav-collapsed .navtext {
+  /* max-width to 0, not just opacity. Fading alone left the label occupying its full width in a
+     54px rail, so it still painted into the rail and still took the space the first-letter
+     marker needs to sit centred. Collapsing the track removes it from layout AND animates the
+     close. visibility flips after the fade so nothing invisible is left hit-testable. */
+  max-width: 0; opacity: 0; visibility: hidden; pointer-events: none;
+  transition: opacity 90ms ease,
+              max-width 200ms cubic-bezier(.4, 0, .2, 1) 40ms,
+              visibility 0s 140ms;
+}
+/* Clip at the link, not just at the rail: a label wider than the collapsed track would
+   otherwise paint over the icon for the length of the fade. */
+.navlink { overflow: hidden; }
+/* Nothing to animate for anyone who asked not to see motion. */
+@media (prefers-reduced-motion: reduce) {
+  .shell, .navtext, .nav-chevron, .nav-note { transition: none; }
+}
+.nav-note { transition: opacity 130ms ease 150ms; opacity: 1; }
+.shell.nav-collapsed .nav-note {
+  opacity: 0; transition: opacity 90ms ease; pointer-events: none;
+  height: 0; padding-top: 0; padding-bottom: 0; overflow: hidden;
+}
+
+/* The first-letter rail marker is the inverse: absent when expanded. */
+.navmark {
+  display: none;
+  width: 22px; height: 22px; border-radius: 6px;
+  align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; letter-spacing: .01em;
+  background: var(--panel-2); color: var(--text-dim); flex: none;
+}
+.shell.nav-collapsed .navmark { display: flex; }
+.shell.nav-collapsed .navlink { justify-content: center; padding: 7px 4px; gap: 0; }
+.shell.nav-collapsed .navlink.active .navmark { background: var(--accent-bg); color: var(--accent); }
+
+/* Respect a reduced-motion preference: still collapses, just without the travel. */
+@media (prefers-reduced-motion: reduce) {
+  .shell, .nav-chevron, .navtext { transition: none; }
+}
+.navlink {
+  display: flex; align-items: center; gap: 9px;
+  padding: 7px 10px; border-radius: 6px;
+  color: var(--text-dim); font-size: 13.5px; font-weight: 500;
+  white-space: nowrap;
+}
+.navlink:hover { background: var(--panel-2); color: var(--text); text-decoration: none; }
+.navlink.active { background: var(--accent-bg); color: var(--accent); font-weight: 600; }
+.navlink .navkey {
+  width: 18px; text-align: center; font-family: var(--mono); font-size: 11px;
+  color: var(--text-mute); flex: none;
+}
+.navlink.active .navkey { color: var(--accent); }
+.nav-sep { height: 1px; background: var(--line-soft); margin: 8px 6px; flex: none; }
+.nav-note { padding: 6px 10px; font-size: 11px; color: var(--text-mute); }
+/* Non-clickable section title (ADMIN). Quiet, uppercase, and never a link. Hidden when the rail
+   is collapsed - the divider above it already marks where the group begins. */
+.nav-heading {
+  padding: 2px 10px 4px; font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .08em; color: var(--text-mute);
+}
+.shell.nav-collapsed .nav-heading { display: none; }
+
+/* margin-top:auto pins this to the bottom of the flex column, so the build number sits in
+   the bottom-left corner however many nav items there are. */
+.topversion { display: none; }
+
+/* Rail footer: the running build, and the certificate seal to its right. margin-top:auto lives
+   here now (it used to be on .nav-version) so the whole footer floats to the bottom of the rail. */
+.nav-foot {
+  margin-top: auto;
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 10px 6px;
+}
+.nav-version {
+  font-family: var(--mono); font-size: 11px; color: var(--text-mute);
+  letter-spacing: .02em;
+}
+.shell.nav-collapsed .nav-version { display: none; }
+/* Collapsed rail: the version is hidden, so the seal centres in the narrow column. */
+.shell.nav-collapsed .nav-foot { justify-content: center; padding: 10px 4px 6px; }
+/* Certificate seal. A rarely-visited reference page, so an icon rather than a whole nav row,
+   linking the same #/certs route; stroked in currentColor to follow the theme like the brand. */
+.nav-cert {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border-radius: 6px; flex: 0 0 auto;
+  color: var(--text-mute); border: 1px solid transparent; text-decoration: none;
+}
+.nav-cert:hover, .nav-cert.active {
+  color: var(--accent); border-color: var(--line); background: var(--panel-2);
+}
+.nav-cert-glyph { display: inline-flex; }
+.nav-cert-glyph svg { width: 17px; height: 17px; display: block; }
+
+.view { min-width: 0; padding: 16px 18px 60px; }
+
+@media (max-width: 900px) {
+  .shell { grid-template-columns: minmax(0, 1fr); }
+  .sidebar {
+    position: static; height: auto; flex-direction: row; overflow-x: auto;
+    border-right: 0; border-bottom: 1px solid var(--line); padding: 8px;
+  }
+  .nav-sep, .nav-note, .nav-heading { display: none; }
+  .navlink .navkey { display: none; }
+  .view { padding: 14px 12px 50px; }
+  .globalsearch { max-width: none; }
+  .brand-text { display: none; }
+}
+
+/* ------------------------------------------------------------------ atoms */
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  box-shadow: var(--shadow);
+}
+
+.page-head {
+  display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap;
+  margin: 0 0 14px;
+}
+.page-title { margin: 0; font-size: 18px; font-weight: 650; letter-spacing: -.01em; }
+.page-sub { margin: 0; color: var(--text-dim); font-size: 12.5px; }
+.page-actions { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+
+.btn {
+  font: inherit; font-size: 13px; font-weight: 550;
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel-2);
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn:hover { border-color: var(--text-mute); }
+.btn:active { transform: translateY(1px); }
+.btn[disabled] { opacity: .5; cursor: not-allowed; transform: none; }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+.btn-primary:hover { filter: brightness(1.08); }
+.btn-danger { color: var(--danger); border-color: var(--danger); background: transparent; }
+.btn-danger:hover { background: var(--danger-bg); }
+.btn-quiet { background: transparent; }
+.btn-sm { padding: 3px 8px; font-size: 12px; }
+.btn-block { width: 100%; display: block; margin-top: 6px; }
+
+input[type=text], input[type=search], input[type=password], input[type=number], select, textarea {
+  font: inherit; font-size: 13px;
+  padding: 6px 9px;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  max-width: 100%;
+}
+input:disabled, textarea:disabled, select:disabled { opacity: .55; }
+textarea { width: 100%; min-height: 260px; font-family: var(--mono); font-size: 12.5px; line-height: 1.55; resize: vertical; }
+select { cursor: pointer; }
+
+.field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; min-width: 0; }
+.field-label { font-size: 11.5px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: .04em; }
+.field-hint { font-size: 11.5px; color: var(--text-mute); }
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0 12px; }
+.form-actions { display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+
+.alert {
+  padding: 9px 12px; border-radius: 7px; font-size: 13px;
+  border: 1px solid transparent; margin: 0 0 12px;
+  overflow-wrap: anywhere;
+}
+.alert-error { background: var(--danger-bg); border-color: var(--danger); color: var(--danger); }
+.alert-warn  { background: var(--warn-bg);  border-color: var(--warn);  color: var(--warn); }
+.alert-ok    { background: var(--ok-bg);    border-color: var(--ok);    color: var(--ok); }
+.alert-info  { background: var(--info-bg);  border-color: var(--info);  color: var(--info); }
+.alert-title { font-weight: 650; display: block; margin-bottom: 2px; }
+.alert .btn { margin-top: 8px; }
+
+.muted { color: var(--text-mute); }
+.dim { color: var(--text-dim); }
+.nowrap { white-space: nowrap; }
+.small { font-size: 12px; }
+.tiny { font-size: 11.5px; }
+
+.loading, .empty {
+  padding: 26px 14px; text-align: center; color: var(--text-mute); font-size: 13px;
+}
+.empty-title { display: block; color: var(--text-dim); font-weight: 600; margin-bottom: 3px; }
+
+/* pills ------------------------------------------------------------------ */
+.pill {
+  display: inline-block; padding: 1px 8px; border-radius: 999px;
+  font-size: 11.5px; font-weight: 650; letter-spacing: .01em;
+  border: 1px solid transparent; white-space: nowrap;
+}
+.pill-open      { background: var(--warn-bg);   color: var(--warn);   border-color: var(--warn); }
+.pill-confirmed { background: var(--info-bg);   color: var(--info);   border-color: var(--info); }
+.pill-ready     { background: var(--ready-bg);  color: var(--ready);  border-color: var(--ready); }
+.pill-submitted { background: var(--ok-bg);     color: var(--ok);     border-color: var(--ok); }
+.pill-awarded   { background: var(--award-bg);  color: var(--award);  border-color: var(--award); }
+.pill-parked    { background: var(--panel-2);   color: var(--text-dim); border-color: var(--line); }
+.pill-killed    { background: var(--danger-bg); color: var(--danger); border-color: var(--danger); }
+.pill-unknown   { background: transparent;      color: var(--text-mute); border-color: var(--line-soft); }
+.pill-neutral   { background: var(--panel-2);   color: var(--text-dim); border-color: var(--line); }
+
+.tag {
+  display: inline-block; padding: 0 6px; border-radius: 4px;
+  background: var(--panel-2); border: 1px solid var(--line-soft);
+  color: var(--text-dim); font-size: 11.5px; font-family: var(--mono);
+  white-space: nowrap;
+}
+
+/* tables ----------------------------------------------------------------- */
+.tablewrap { overflow-x: auto; max-width: 100%; }
+table.data { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.data th, table.data td {
+  /* 7px gutters, not 10px. Eleven columns on the Tracker means every pixel of horizontal padding
+     is paid for twenty-two times, which is most of the difference between fitting and needing a
+     horizontal scroll. */
+  text-align: left; padding: 6px 7px;
+  border-bottom: 1px solid var(--line-soft);
+  vertical-align: top;
+}
+table.data thead th {
+  position: sticky; top: 0; z-index: 1;
+  background: var(--panel-2);
+  color: var(--text-dim);
+  font-size: 11.5px; font-weight: 650; text-transform: uppercase; letter-spacing: .04em;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+table.data tbody tr.clickable { cursor: pointer; }
+table.data tbody tr.clickable:hover { background: var(--panel-2); }
+table.data tbody tr.selected { background: var(--accent-bg); }
+table.data tbody tr.selected td { border-bottom-color: var(--accent); }
+.sortbtn {
+  background: none; border: 0; padding: 0; margin: 0; font: inherit; color: inherit;
+  cursor: pointer; text-transform: inherit; letter-spacing: inherit; font-weight: inherit;
+}
+.sortbtn:hover { color: var(--accent); }
+.sortbtn .arrow { color: var(--accent); }
+/* The title column absorbs whatever the nowrap columns leave (`cell-max` is width:100%), so
+   every column added squeezes it further and long titles start wrapping one word per line. A
+   floor keeps it readable; past that `.tablewrap` scrolls horizontally, which is the right
+   trade because a scrollbar is recoverable and a shredded title is not. `break-word` keeps the
+   wrap on word boundaries rather than mid-token. */
+/* Staleness of a report's last activity. Coarse on purpose: the question is "has this gone
+   quiet", not "exactly how quiet". Fresh is deliberately UNCOLOURED - most rows are recent and a
+   table where every cell shouts says nothing. Colour is spent only where it changes what Seth
+   does: amber past a month, red past a quarter. */
+.agecell { font-variant-numeric: tabular-nums; font-weight: 600; }
+.agecell.age-fresh { color: var(--text-dim); }
+.agecell.age-warm  { color: var(--text); }
+.agecell.age-cool  { color: var(--warn); }
+.agecell.age-stale { color: var(--danger); }
+.agecell.age-none  { color: var(--text-mute); font-weight: 400; }
+
+.cell-title {
+  font-weight: 550;
+  min-width: 20rem;
+  overflow-wrap: break-word;
+}
+/* Title weight WITHOUT the 20rem min-width, for a short label column (Programs Name) that should
+   size to its content and pack left rather than reserve a wide, near-empty column. */
+.cell-name { font-weight: 550; }
+@media (max-width: 900px) { .cell-title { min-width: 12rem; } }
+.cell-mono { font-family: var(--mono); font-size: 12px; }
+/* The flexible column. It was allowed 460px, which it took whenever the window was wide enough,
+   pushing the columns to its right off the edge. It truncates with an ellipsis and carries the
+   full text in a title attribute, so yielding width costs nothing that a hover does not recover. */
+.cell-max { max-width: 320px; }
+.trunc { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The OTHER flexible column, and the opposite trade. An audit detail is the whole answer to
+   "what happened", so it wraps to as many lines as it needs instead of ellipsising: a truncated
+   detail is not shorter, it is unreadable. Capped anyway, or a long JSON blob would take the
+   width the timestamp and actor columns need to stay on one line. */
+table.data th.cell-detail, table.data td.cell-detail { width: 100%; max-width: 460px; }
+
+/* SNUG METADATA COLUMNS. table.data is width:100%, so without this the browser spreads the
+   leftover width evenly across every column and the narrow ones drift apart - Program ended up
+   a long eye-movement away from Target, which are meant to be read as a pair. `width: 1%` is the
+   shrink-to-fit idiom: a minimum rather than a cap, so each column still sizes to its content.
+   The title column claims everything left over. */
+table.data th.nowrap, table.data td.nowrap { width: 1%; }
+table.data th.cell-max, table.data td.cell-max { width: 100%; }
+/* Tighter gutters on the narrow columns only; the title keeps its breathing room. */
+table.data th.tiny, table.data td.tiny { padding-left: 7px; padding-right: 7px; max-width: 150px; }
+
+/* .asset-fallback removed: an H1 asset standing in for a target now renders exactly like a
+   workspace target, lowercased in the same weight and colour. Two treatments in one column read
+   as two kinds of data when the reader only wants the target. */
+
+/* filters + pager -------------------------------------------------------- */
+.filters {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end;
+  padding: 10px 12px; margin-bottom: 12px;
+}
+
+/* Add-program picker (Programs tab): an inline panel that searches accessible HackerOne programs. */
+.add-program { margin-bottom: 12px; padding: 14px 16px; }
+.add-program-head { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.add-program-head input[type="search"] { width: 100%; }
+.add-program-results { display: flex; flex-direction: column; gap: 2px; max-height: 420px; overflow-y: auto; }
+.add-program-more { padding: 4px 2px 8px; }
+.add-program-row {
+  display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 6px;
+}
+.add-program-row:hover { background: var(--bg-sunk); }
+.add-program-name { display: flex; align-items: center; gap: 8px; flex: 1 1 auto; min-width: 0; }
+.add-program-name .apn-title {
+  font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.add-program-handle { color: var(--text-mute); font-size: 12px; flex: 0 0 auto; }
+.add-program-row .btn, .add-program-row .pill { flex: 0 0 auto; }
+@media (max-width: 900px) {
+  .add-program-row { flex-wrap: wrap; }
+  .add-program-handle { flex-basis: 100%; order: 3; }
+}
+.filters .field { margin-bottom: 0; }
+.filters .field input, .filters .field select { min-width: 130px; }
+.filters .field.grow { flex: 1; min-width: 180px; }
+.filters .field.grow input { width: 100%; }
+
+/* exclusion ("NOT") filters ---------------------------------------------- */
+/* These read as the INVERSE of the State select above them, so they must not look like the
+   inclusive chips elsewhere: an active one is struck through behind a minus sign, in the
+   muted/danger treatment, never in the accent colour that means "selected". */
+/* Lives INSIDE the list card now, directly under the summary's inclusive chips, so it is
+   separated by a rule rather than by being a card of its own floating above the table. */
+.excludebar {
+  padding: 10px 16px 12px; margin: 0;
+  border-bottom: 1px solid var(--line);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.excludebar:empty { display: none; }
+.exrow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+/* Mode chips are full buttons, taller than an exchip; keep the rows from jumping about. */
+.exrow .btn { padding: 2px 10px; font-size: 11.5px; }
+.exlabel {
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--text-dim); margin-right: 2px;
+}
+.exchip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 2px 4px 2px 8px; border-radius: 999px;
+  font: inherit; font-size: 11.5px; font-weight: 600; white-space: nowrap;
+  border: 1px solid var(--line); background: var(--panel); color: var(--text-dim);
+  cursor: pointer;
+}
+.exchip:hover:not(:disabled) { border-color: var(--danger, var(--warn)); color: var(--text); }
+.exchip .ex-sign { font-weight: 700; opacity: .7; }
+.exchip .ex-n {
+  font-variant-numeric: tabular-nums; font-weight: 700;
+  background: var(--panel-2); border-radius: 999px; padding: 0 7px;
+}
+.exchip.on {
+  border-color: var(--warn); color: var(--warn); background: var(--warn-bg);
+}
+.exchip.on .ex-k { text-decoration: line-through; }
+.exchip.on .ex-sign { opacity: 1; }
+.exchip.inert { opacity: .45; cursor: not-allowed; }
+.exchip-preset { border-style: dashed; padding: 2px 10px; }
+.exnote {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-top: 7px; font-size: 12px; color: var(--text-dim);
+}
+.exnote-on { color: var(--warn); }
+
+/* Privileges-required, decoded from the CVSS vector. None = unauthenticated, and that is the
+   one worth catching the eye. */
+.privpill {
+  display: inline-block; padding: 1px 8px; border-radius: 999px;
+  font-size: 11.5px; font-weight: 600; white-space: nowrap;
+  border: 1px solid var(--line); color: var(--text-dim);
+}
+.privpill.priv-none { color: var(--warn); border-color: var(--warn); }
+.privpill.priv-low { color: var(--info); border-color: var(--info); }
+.privpill.priv-high { color: var(--text-mute); }
+
+/* Impact on Confidentiality / Integrity / Availability, decoded from the CVSS vector. One
+   coloured letter badge per impacted dimension, with an up arrow for High and a down arrow for
+   Low. C red, I amber, A blue - the same palette the severity pills use, so a row reads as one
+   scheme rather than three. The row is inline-flex with a gap so all three fit with clear space
+   between each letter score. */
+.impactcell { display: inline-flex; gap: 4px; align-items: center; }
+.impact-badge {
+  display: inline-flex; align-items: center; gap: 2px;
+  padding: 1px 5px; border-radius: 6px;
+  font-size: 11.5px; font-weight: 700; line-height: 1.5;
+  border: 1px solid transparent; white-space: nowrap;
+}
+/* The arrow carries the whole High/Low signal, so it is deliberately larger and heavier than the
+   letter - at 10px the thin glyph was hard to read as an arrow at all. */
+.impact-badge .ib-arrow { font-size: 14px; font-weight: 900; line-height: 1; }
+.impact-badge.imp-c { background: var(--danger-bg); color: var(--danger); border-color: var(--danger); }
+.impact-badge.imp-i { background: var(--warn-bg);   color: var(--warn);   border-color: var(--warn); }
+.impact-badge.imp-a { background: var(--info-bg);   color: var(--info);   border-color: var(--info); }
+
+/* CWE column, badge-styled to match State / Sev / Impact, but still a link to the MITRE
+   definition - the whole value of the column is one click to what the weakness IS. */
+.cwe-badge {
+  display: inline-block; padding: 1px 7px; border-radius: 999px;
+  font-size: 11.5px; font-weight: 650; white-space: nowrap;
+  background: var(--panel-2); border: 1px solid var(--line); color: var(--text-dim);
+  text-decoration: none;
+}
+a.cwe-badge:hover { border-color: var(--accent); color: var(--accent); }
+
+.pager {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 9px 12px; border-top: 1px solid var(--line-soft);
+  font-size: 12.5px; color: var(--text-dim);
+}
+.pager .spacer { flex: 1; }
+
+/* split list/detail ------------------------------------------------------ */
+.split { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.split.no-detail { grid-template-columns: minmax(0, 1fr); }
+@media (max-width: 1150px) { .split { grid-template-columns: minmax(0, 1fr); } }
+
+.pane { padding: 0; overflow: hidden; }
+.pane-head {
+  display: flex; align-items: flex-start; gap: 10px; flex-wrap: wrap;
+  padding: 11px 14px; border-bottom: 1px solid var(--line-soft); background: var(--panel-2);
+}
+.pane-head h2 { margin: 0; font-size: 15px; font-weight: 650; letter-spacing: -.01em; min-width: 0; overflow-wrap: anywhere; }
+.pane-head .pane-actions { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
+.pane-body { padding: 14px; }
+.pane-body > :first-child { margin-top: 0; }
+/* Section label INSIDE a pane body. .card-title carries a card's own padding and rule, which
+   double up on a body that is already padded, so it cannot be reused here. */
+.pane-label {
+  font-size: 10.5px; font-weight: 650; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--text-mute); margin: 0 0 6px;
+}
+
+.metagrid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 8px 14px; margin: 0 0 14px;
+  padding: 0 0 12px; border-bottom: 1px solid var(--line-soft);
+}
+.metagrid .k { display: block; font-size: 10.5px; font-weight: 650; text-transform: uppercase; letter-spacing: .05em; color: var(--text-mute); }
+.metagrid .v { display: block; font-size: 13px; overflow-wrap: anywhere; }
+.metagrid .v.mono { font-family: var(--mono); font-size: 12px; }
+
+/* dashboard -------------------------------------------------------------- */
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)); gap: 10px; margin-bottom: 14px; }
+
+/* Breakdowns down the left half, hacktivity down the right. align-items:start so hacktivity
+   keeps its natural height at the top of its column instead of stretching to match a left
+   column that grows every time a breakdown card is added. */
+.dash-split {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px;
+  /* stretch, not start: hacktivity matches the height of the stacked column beside it and
+     scrolls its own rows, instead of ending a third of the way down with dead space under it. */
+  align-items: stretch;
+}
+.dash-col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+/* The gap owns the spacing between cards here; per-card margins would stack on top of it. */
+.dash-col > .card, .dash-split > .hacktivity { margin-bottom: 0; }
+/* The card must MATCH the left column's height, never set it. Stretch alone could not do that:
+   once the feed held more rows than the column had cards, hacktivity became the taller item and
+   drove the row, hanging past the last card on the left.
+   So the wrapper is the grid item and the card fills it absolutely. An absolutely positioned
+   child contributes nothing to its parent's height, so the row is measured from .dash-col alone
+   and the card is pinned to exactly that, scrolling its rows inside. */
+.dash-side { position: relative; min-height: 300px; }
+.dash-side > .hacktivity {
+  position: absolute; inset: 0; margin: 0;
+  display: flex; flex-direction: column; min-height: 0;
+}
+.dash-side > .hacktivity > :last-child {
+  display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto;
+}
+/* hidden, not auto: fitHacktivityRows() has already dropped the rows that do not fit, so
+   there is nothing to scroll to and a scrollbar would only be a phantom control. */
+.dash-split .ha-rows { flex: 1 1 auto; min-height: 0; overflow: hidden; }
+/* The row cap that pulls the age in is redundant once the column itself is the constraint. */
+.dash-split .ha-rows { max-width: none; }
+@media (max-width: 900px) {
+  .dash-split { grid-template-columns: 1fr; }
+  /* Stacked, there is no column to match, so the card goes back to flowing at its own height. */
+  .dash-side { position: static; min-height: 0; }
+  .dash-side > .hacktivity { position: static; }
+  .dash-split .ha-rows { max-width: 640px; overflow: visible; }
+}
+.tile { padding: 12px 14px; }
+.tile .n { display: block; font-size: 24px; font-weight: 680; letter-spacing: -.02em; line-height: 1.15; }
+.tile .k {
+  display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+  font-size: 11.5px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .05em;
+}
+a.tile:hover { border-color: var(--accent); text-decoration: none; }
+
+.cards3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; align-items: start; }
+.card-title {
+  padding: 10px 14px; border-bottom: 1px solid var(--line-soft);
+  font-size: 12px; font-weight: 650; text-transform: uppercase; letter-spacing: .05em; color: var(--text-dim);
+}
+
+.bars { padding: 12px 14px; display: flex; flex-direction: column; gap: 9px; }
+.barrow { display: grid; grid-template-columns: minmax(60px, 34%) 1fr auto; gap: 9px; align-items: center; font-size: 12.5px; }
+.barrow .bl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-dim); }
+.barrow a.bl { color: var(--accent); }
+.barrow .bt { background: var(--bg-sunk); border-radius: 999px; height: 9px; overflow: hidden; }
+.barrow .bf { height: 100%; border-radius: 999px; background: var(--accent); min-width: 2px; }
+.barrow .bn { font-variant-numeric: tabular-nums; font-weight: 650; min-width: 34px; text-align: right; }
+.bf.s-open { background: var(--warn); }
+.bf.s-confirmed { background: var(--info); }
+.bf.s-ready { background: var(--ready); }
+.bf.s-submitted { background: var(--ok); }
+.bf.s-awarded { background: var(--award); }
+.bf.s-parked { background: var(--text-mute); }
+.bf.s-killed { background: var(--danger); }
+.bf.s-unknown { background: var(--line); }
+.barrow.is-open .bl, .barrow.is-open .bn { color: var(--warn); font-weight: 700; }
+
+/* files ------------------------------------------------------------------ */
+.crumbs {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px;
+  padding: 9px 12px; font-family: var(--mono); font-size: 12px;
+  border-bottom: 1px solid var(--line-soft); background: var(--panel-2);
+}
+.crumbs .sep { color: var(--text-mute); }
+.crumbs button {
+  background: none; border: 0; padding: 1px 4px; font: inherit; color: var(--accent);
+  cursor: pointer; border-radius: 4px;
+}
+.crumbs button:hover { background: var(--accent-bg); }
+.crumbs .cur { color: var(--text); padding: 1px 4px; }
+
+tr.denied, tr.denied td { color: var(--text-mute); cursor: not-allowed; background: var(--bg-sunk); }
+tr.denied .cell-title { font-weight: 400; text-decoration: line-through; text-decoration-color: var(--text-mute); }
+.lock { font-family: var(--mono); font-size: 11px; color: var(--danger); border: 1px solid var(--danger); border-radius: 4px; padding: 0 5px; }
+.ftype { display: inline-block; width: 16px; color: var(--text-mute); font-family: var(--mono); }
+
+/* search ----------------------------------------------------------------- */
+.results { display: flex; flex-direction: column; }
+.result {
+  display: block; padding: 10px 14px; border-bottom: 1px solid var(--line-soft);
+  color: inherit; text-align: left; width: 100%; background: none; border-left: 0; border-right: 0; border-top: 0;
+  font: inherit; cursor: pointer;
+}
+.result:hover { background: var(--panel-2); text-decoration: none; }
+.result .rt { font-weight: 600; font-size: 13.5px; overflow-wrap: anywhere; }
+.result .rm { font-size: 11.5px; color: var(--text-mute); display: flex; gap: 8px; flex-wrap: wrap; margin-top: 1px; }
+.result .rs { font-size: 12.5px; color: var(--text-dim); margin-top: 4px; overflow-wrap: anywhere; }
+
+/* dropzone / upload ------------------------------------------------------ */
+.dropzone {
+  border: 2px dashed var(--line); border-radius: 9px;
+  padding: 26px 16px; text-align: center; color: var(--text-dim);
+  background: var(--panel-2); cursor: pointer;
+}
+.dropzone:hover, .dropzone:focus-visible { border-color: var(--accent); color: var(--text); }
+.dropzone.over { border-color: var(--accent); background: var(--accent-bg); color: var(--accent); }
+.dropzone .dz-big { display: block; font-size: 14px; font-weight: 650; margin-bottom: 3px; }
+
+.progress { height: 8px; background: var(--bg-sunk); border-radius: 999px; overflow: hidden; margin-top: 10px; }
+.progress > div { height: 100%; background: var(--accent); width: 0; transition: width .12s linear; }
+
+.uplist { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.uplist li { border: 1px solid var(--line-soft); border-radius: 7px; padding: 8px 10px; font-size: 12.5px; }
+.uplist .fn { font-weight: 600; overflow-wrap: anywhere; }
+
+/* tracker diff ----------------------------------------------------------- */
+.diffgroup { margin-bottom: 14px; }
+.diffgroup h3 { margin: 0 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-dim); }
+.diffline {
+  font-family: var(--mono); font-size: 12px; padding: 4px 9px; margin-bottom: 3px;
+  border-left: 3px solid var(--line); border-radius: 0 5px 5px 0;
+  background: var(--panel-2); overflow-x: auto; white-space: pre;
+}
+.diffline.add { border-left-color: var(--ok); background: var(--ok-bg); color: var(--ok); }
+.diffline.rem { border-left-color: var(--danger); background: var(--danger-bg); color: var(--danger); }
+.diffline.chg { border-left-color: var(--warn); background: var(--warn-bg); color: var(--warn); }
+.diffpair { border-left: 3px solid var(--warn); border-radius: 0 5px 5px 0; margin-bottom: 6px; overflow: hidden; }
+.diffpair .diffline { margin: 0; border-radius: 0; border-left-width: 0; }
+
+/* tokens ----------------------------------------------------------------- */
+.tokenbox { padding: 14px; margin-bottom: 14px; border: 1px solid var(--warn); background: var(--warn-bg); border-radius: 9px; }
+.tokenbox .tv {
+  display: block; font-family: var(--mono); font-size: 14px; word-break: break-all;
+  background: var(--panel); color: var(--text); border: 1px solid var(--line);
+  border-radius: 6px; padding: 10px 12px; margin: 9px 0;
+}
+
+/* toasts ----------------------------------------------------------------- */
+.toasts {
+  position: fixed; right: 14px; bottom: 14px; z-index: 70;
+  display: flex; flex-direction: column; gap: 8px;
+  max-width: min(420px, calc(100vw - 28px));
+}
+.toast {
+  display: flex; gap: 10px; align-items: flex-start;
+  padding: 9px 12px; border-radius: 8px; font-size: 13px;
+  background: var(--panel); border: 1px solid var(--line);
+  box-shadow: var(--shadow); overflow-wrap: anywhere;
+}
+.toast.err { border-color: var(--danger); color: var(--danger); background: var(--danger-bg); }
+.toast.ok { border-color: var(--ok); color: var(--ok); background: var(--ok-bg); }
+.toast button { background: none; border: 0; color: inherit; cursor: pointer; font-size: 15px; line-height: 1; padding: 0 2px; margin-left: auto; }
+
+/* ------------------------------------------------------------------ markdown */
+.md { font-size: 13.5px; line-height: 1.62; overflow-wrap: anywhere; }
+.md > :first-child { margin-top: 0; }
+.md > :last-child { margin-bottom: 0; }
+.md h1, .md h2, .md h3, .md h4, .md h5, .md h6 {
+  margin: 1.35em 0 .5em; line-height: 1.3; font-weight: 650; letter-spacing: -.01em;
+}
+.md h1 { font-size: 1.42em; border-bottom: 1px solid var(--line-soft); padding-bottom: .25em; }
+.md h2 { font-size: 1.22em; border-bottom: 1px solid var(--line-soft); padding-bottom: .2em; }
+.md h3 { font-size: 1.08em; }
+.md h4, .md h5, .md h6 { font-size: 1em; color: var(--text-dim); }
+.md p { margin: 0 0 .8em; }
+.md ul, .md ol { margin: 0 0 .8em; padding-left: 1.5em; }
+.md li { margin: .18em 0; }
+.md li.task { list-style: none; margin-left: -1.2em; }
+/* A note's opening "Label: value" header block. No bullet glyphs: with the field names already
+   set apart, markers only add noise to what is really a small key/value table. */
+.md ul.fields { list-style: none; padding-left: 0; margin: 0 0 .9em; }
+.md ul.fields li { margin: .22em 0; padding-left: 8.5em; text-indent: -8.5em; }
+.md ul.fields .fk {
+  display: inline-block; width: 8em; margin-right: .5em; text-indent: 0;
+  color: var(--text-dim); font-size: .92em; letter-spacing: .02em;
+}
+@media (max-width: 620px) {
+  .md ul.fields li { padding-left: 0; text-indent: 0; }
+  .md ul.fields .fk { display: block; width: auto; margin: 0; }
+}
+.md blockquote {
+  margin: 0 0 .8em; padding: .1em .9em; border-left: 3px solid var(--line);
+  color: var(--text-dim); background: var(--panel-2); border-radius: 0 6px 6px 0;
+}
+.md code {
+  font-family: var(--mono); font-size: .88em;
+  background: var(--panel-2); border: 1px solid var(--line-soft);
+  border-radius: 4px; padding: .06em .32em;
+}
+.md pre.code {
+  margin: 0 0 .9em; padding: 10px 12px;
+  background: var(--bg-sunk); border: 1px solid var(--line-soft); border-radius: 7px;
+  overflow-x: auto; max-width: 100%;
+}
+.md pre.code code { background: none; border: 0; padding: 0; font-size: 12.3px; line-height: 1.5; white-space: pre; }
+.md hr { border: 0; border-top: 1px solid var(--line); margin: 1.2em 0; }
+.md a.wikilink {
+  color: var(--accent); background: var(--accent-bg);
+  border-radius: 4px; padding: 0 4px; text-decoration: none;
+  border-bottom: 1px dotted var(--accent);
+}
+.md .tablewrap { margin: 0 0 .9em; }
+.md table { border-collapse: collapse; font-size: 12.5px; width: auto; min-width: 100%; }
+.md th, .md td { border: 1px solid var(--line-soft); padding: 4px 9px; text-align: left; vertical-align: top; }
+/* `.md` sets overflow-wrap:anywhere so a long URL in prose cannot force a horizontal scroll.
+   Table cells inherit it, and in the narrow label column of a lead header that broke words
+   mid-token - "Submitt/ed", "Researc/her", "Evidenc/e". Cells wrap on word boundaries instead;
+   anything genuinely too wide scrolls inside .tablewrap, which is the better trade. */
+.md th, .md td { overflow-wrap: break-word; }
+/* The label column of a two-column header table. Keeps short labels on one line. */
+.md td:first-child { white-space: nowrap; }
+.md th { background: var(--panel-2); font-weight: 650; white-space: nowrap; }
+.md img { max-width: 100%; }
+
+/* Payload arsenal. A documented block runs to a couple of hundred lines, so it scrolls in
+   place instead of pushing the next hit off the screen. */
+pre.payload {
+  margin: 0 0 9px; padding: 10px 12px; max-height: 320px; overflow: auto;
+  background: var(--bg-sunk); border: 1px solid var(--line-soft); border-radius: 7px;
+  font-family: var(--mono); font-size: 12.3px; line-height: 1.5; white-space: pre;
+}
+.payload-meta {
+  font-size: 11.5px; color: var(--text-mute);
+  display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 8px;
+}
+
+pre.filetext {
+  margin: 0; padding: 12px 14px;
+  background: var(--bg-sunk); border: 1px solid var(--line-soft); border-radius: 7px;
+  overflow-x: auto; max-width: 100%;
+  font-family: var(--mono); font-size: 12.3px; line-height: 1.5; white-space: pre;
+}
+
+/* ------------------------------------------------------------- certificates */
+.certgrid { display: flex; flex-direction: column; gap: 2px; }
+
+.certrow {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr);
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--line-soft);
+  align-items: baseline;
+}
+.certrow:last-child { border-bottom: 0; }
+
+.certrow-label {
+  color: var(--text-dim);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+/* Fingerprints and DNs are long and must not force the page to scroll sideways. */
+.certrow-value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  font-size: 13px;
+}
+.certrow-value.mono { font-family: var(--mono, ui-monospace, SFMono-Regular, Menlo, monospace); font-size: 12.5px; }
+
+.tabrow { display: flex; flex-wrap: wrap; gap: 6px; }
+
+@media (max-width: 620px) {
+  .certrow { grid-template-columns: 1fr; gap: 2px; }
+}
+
+/* ----------------------------------------------------------------- refresh */
+.refresh-btn { display: inline-flex; align-items: center; gap: 2px; }
+.refresh-glyph { display: inline-block; line-height: 1; }
+.refresh-btn.spinning .refresh-glyph { animation: spin .6s linear infinite; }
+.refresh-btn[disabled] { opacity: .65; cursor: default; }
+
+/* ------------------------------------------------------------ severity pills */
+.pill.sev-critical { background: #7f1d1d; color: #fee2e2; border-color: #991b1b; }
+.pill.sev-high     { background: #7c2d12; color: #ffedd5; border-color: #9a3412; }
+.pill.sev-medium   { background: #713f12; color: #fef3c7; border-color: #854d0e; }
+.pill.sev-low      { background: #1e3a5f; color: #dbeafe; border-color: #1e40af; }
+.pill.sev-none     { background: var(--panel-2); color: var(--text-mute); }
+
+@media (prefers-color-scheme: light) {
+  .pill.sev-critical { background: #fee2e2; color: #7f1d1d; border-color: #fca5a5; }
+  .pill.sev-high     { background: #ffedd5; color: #7c2d12; border-color: #fdba74; }
+  .pill.sev-medium   { background: #fef3c7; color: #713f12; border-color: #fcd34d; }
+  .pill.sev-low      { background: #dbeafe; color: #1e3a5f; border-color: #93c5fd; }
+}
+:root[data-theme="light"] .pill.sev-critical { background: #fee2e2; color: #7f1d1d; border-color: #fca5a5; }
+:root[data-theme="light"] .pill.sev-high     { background: #ffedd5; color: #7c2d12; border-color: #fdba74; }
+:root[data-theme="light"] .pill.sev-medium   { background: #fef3c7; color: #713f12; border-color: #fcd34d; }
+:root[data-theme="light"] .pill.sev-low      { background: #dbeafe; color: #1e3a5f; border-color: #93c5fd; }
+:root[data-theme="dark"]  .pill.sev-critical { background: #7f1d1d; color: #fee2e2; border-color: #991b1b; }
+:root[data-theme="dark"]  .pill.sev-high     { background: #7c2d12; color: #ffedd5; border-color: #9a3412; }
+:root[data-theme="dark"]  .pill.sev-medium   { background: #713f12; color: #fef3c7; border-color: #854d0e; }
+:root[data-theme="dark"]  .pill.sev-low      { background: #1e3a5f; color: #dbeafe; border-color: #1e40af; }
+
+.cvelist { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.cve { font-size: 12px; white-space: nowrap; }
+
+/* --------------------------------------------------------------- audit log */
+.cards2 {
+  display: grid; gap: 12px; margin-bottom: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+.card-head { margin-bottom: 8px; }
+.card-sub { color: var(--text-dim); font-size: 12px; margin-top: 2px; }
+.card-tools { margin: 8px 0; }
+/* The trail's filter strip lives inside the list pane now, so it needs the pane's gutters
+   rather than a card's margin. */
+.audit-tools {
+  margin: 0; padding: 10px 14px; border-bottom: 1px solid var(--line);
+  display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center;
+}
+/* Markdown rendered into a table cell. Same escaping path as any other .md block, tightened so
+   a one-line detail costs one line: the block margins that separate paragraphs in a pane would
+   otherwise put a blank line above and below every cell. */
+.md-cell { font-size: 12px; line-height: 1.5; }
+.md-cell p, .md-cell ul, .md-cell ol, .md-cell pre.code, .md-cell .tablewrap { margin: 0; }
+.md-cell ul, .md-cell ol { padding-left: 1.1em; }
+.md-cell pre.code { padding: 6px 8px; }
+.md-cell pre.code code { white-space: pre-wrap; }
+.card-note {
+  margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--line-soft);
+  line-height: 1.5;
+}
+.card-skeleton { opacity: .92; }
+.card-skeleton .card-title { display: flex; align-items: center; gap: 8px; }
+
+.skeleton-list { margin: 6px 0 0; padding-left: 18px; }
+.skeleton-list li { color: var(--text-dim); font-size: 12.5px; margin: 4px 0; line-height: 1.45; }
+
+.pill-planned {
+  background: transparent; border: 1px dashed var(--line);
+  color: var(--text-mute); font-size: 10px; letter-spacing: .06em; text-transform: uppercase;
+}
+
+/* ------------------------------------------------------------- NEW badges */
+.newbadge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px; border-radius: 999px;
+  font-size: 11px; font-weight: 700; letter-spacing: .04em;
+  background: linear-gradient(135deg, #37c2a8, #2a9d8f);
+  color: #06231f;
+  border: 1px solid rgba(255, 255, 255, .18);
+  box-shadow: 0 0 0 0 rgba(55, 194, 168, .55);
+  animation: newpulse 2.4s ease-out 3;
+  vertical-align: middle;
+}
+.newbadge .newbadge-label { text-transform: uppercase; }
+.newbadge .newbadge-count { font-variant-numeric: tabular-nums; }
+
+@keyframes newpulse {
+  0%   { box-shadow: 0 0 0 0 rgba(55, 194, 168, .55); }
+  70%  { box-shadow: 0 0 0 7px rgba(55, 194, 168, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(55, 194, 168, 0); }
+}
+
+/* Marked read: fade and collapse out, then removed from the DOM by JS. */
+.newbadge.fading {
+  animation: none;
+  opacity: 0;
+  transform: scale(.85);
+  transition: opacity .45s ease, transform .45s ease, margin .45s ease;
+  margin-left: -4px;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .newbadge { animation: none; }
+  .newbadge.fading { transition: opacity .2s linear; transform: none; }
+}
+
+/* Both badges can land on the Reports tile at once. They share a host so the label row wraps
+   them as one unit rather than letting a badge drift onto its own line ahead of the other. */
+.tile-badges { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+/* ------------------------------------------------- UPDATED badge (HackerOne moved a report)
+   Amber, against the teal of NEW. The distinction carries meaning and is not decoration: teal
+   is work you added, amber is the program acting on work you already filed. Deliberately the
+   warmer and more arresting of the two, because a triage or an award wants reading today. */
+.updbadge {
+  /* Smaller than the NEW badge it sits beside. Two full-size pills on one tile compete with the
+     number they are annotating, which is the thing actually being read. */
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 1px 6px; border-radius: 999px;
+  font-size: 9.5px; font-weight: 700; letter-spacing: .03em;
+  background: linear-gradient(135deg, #f0b23c, #d98829);
+  color: #2b1a00;
+  border: 1px solid rgba(255, 255, 255, .18);
+  box-shadow: 0 0 0 0 rgba(240, 178, 60, .55);
+  animation: updpulse 2.4s ease-out 3;
+  vertical-align: middle;
+  cursor: help;
+}
+.updbadge .updbadge-label { text-transform: uppercase; }
+.updbadge .updbadge-count { font-variant-numeric: tabular-nums; }
+
+@keyframes updpulse {
+  0%   { box-shadow: 0 0 0 0 rgba(240, 178, 60, .55); }
+  70%  { box-shadow: 0 0 0 7px rgba(240, 178, 60, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(240, 178, 60, 0); }
+}
+
+.updbadge.fading {
+  animation: none;
+  opacity: 0;
+  transform: scale(.85);
+  transition: opacity .45s ease, transform .45s ease, margin .45s ease;
+  margin-left: -4px;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .updbadge { animation: none; }
+  .updbadge.fading { transition: opacity .2s linear; transform: none; }
+}
+
+/* ------------------------------------------------- AWARD badge (money landed)
+   Green, and green from var(--ok) rather than a hardcoded hex: that is the token the rest of the
+   app already uses for a good outcome, and it is defined per theme, so the text stays legible on
+   the dark palette as well as the light one.
+
+   No colour-ring pulse like the two badges above. Their ring is a fixed rgba, which cannot follow
+   a themed variable, so this one announces itself with a single pop instead - and unlike them it
+   is meant to sit there for a while, where a repeating pulse would nag. */
+.awardbadge {
+  display: inline-flex; align-items: center;
+  padding: 2px 8px; border-radius: 999px;
+  font-size: 11px; font-weight: 700; letter-spacing: .04em;
+  background: var(--ok-bg); color: var(--ok); border: 1px solid var(--ok);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+  vertical-align: middle;
+  cursor: help;
+  animation: awardpop .45s ease-out 1;
+}
+
+@keyframes awardpop {
+  0%   { transform: scale(.75); opacity: 0; }
+  70%  { transform: scale(1.08); opacity: 1; }
+  100% { transform: scale(1);    opacity: 1; }
+}
+
+.awardbadge.fading {
+  animation: none;
+  opacity: 0;
+  transform: scale(.85);
+  transition: opacity .45s ease, transform .45s ease, margin .45s ease;
+  margin-left: -4px;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .awardbadge { animation: none; }
+  .awardbadge.fading { transition: opacity .2s linear; transform: none; }
+}
+
+/* -------------------------------------------------------------- work panel */
+.workpanel {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin: 0 0 14px;
+  background: var(--panel-2);
+}
+.work-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.work-row:last-child { margin-bottom: 0; }
+.work-label {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--text-dim); min-width: 62px;
+}
+/* .work-row-col, .work-note and .work-heading went with the worklog appender. */
+.btn.active { border-color: var(--accent); color: var(--accent); }
+
+/* ------------------------------------------------------ tracker: H1 states
+   Closed-without-action states (duplicate / informative / spam) are grey, not red:
+   they are outcomes, and 80% of the tracker sits in them. Red would say "broken". */
+.pill.st-resolved { background: var(--ok-bg);     color: var(--ok);     border-color: var(--ok); }
+.pill.st-triaged  { background: var(--info-bg);   color: var(--info);   border-color: var(--info); }
+.pill.st-new      { background: var(--warn-bg);   color: var(--warn);   border-color: var(--warn); }
+/* `ready to ship` is the only lead state waiting on Seth rather than on us, so it gets a colour
+   of its own instead of sharing `confirmed`'s blue. Violet is unused elsewhere in the app. */
+.pill.st-ready    { background: var(--ready-bg);  color: var(--ready);  border-color: var(--ready); }
+/* `awarded` is one step PAST `submitted` - filed and paid - so it gets gold rather than sharing
+   that green. See the --award declaration for why gold and not a second green. */
+.pill.st-awarded  { background: var(--award-bg);  color: var(--award);  border-color: var(--award); }
+.pill.st-muted    { background: var(--panel-2);   color: var(--text-mute); border-color: var(--line); }
+.pill.st-unknown  { background: transparent;      color: var(--text-mute); border-color: var(--line-soft); }
+.pill.st-other    { background: var(--panel-2);   color: var(--text-dim);  border-color: var(--line); }
+
+/* ------------------------------------------------- HackerOne state pills and chips
+   The Tracker's State column now carries HackerOne's own palette, matching the Dashboard bars, so
+   a state reads the same everywhere in the app and the same as it does on the platform (user
+   correction 2026-08-03, reversing the earlier decision to keep pills on the app's semantic scale).
+
+   LEAD statuses are deliberately NOT changed - they keep the app's own scale. That is safe only
+   because no name collides between LEAD_STATUSES and REPORT_STATES; several report states used to
+   share `st-muted` with a killed lead, and they were given their own classes in app.js precisely
+   so recolouring them could not drag the lead pills along.
+
+   The pill background is a tint of the SAME hue as the bar rather than a second palette, so a pill
+   and its bar are visibly one colour at two weights. */
+.pill.st-new                     { background: var(--h1-new-bg); color: var(--h1-new); border-color: var(--h1-new); }
+.pill.st-pending-program-review  { background: var(--h1-pending-program-review-bg); color: var(--h1-pending-program-review); border-color: var(--h1-pending-program-review); }
+.pill.st-triaged                 { background: var(--h1-triaged-bg); color: var(--h1-triaged); border-color: var(--h1-triaged); }
+.pill.st-retesting               { background: var(--h1-retesting-bg); color: var(--h1-retesting); border-color: var(--h1-retesting); }
+.pill.st-resolved                { background: var(--h1-resolved-bg); color: var(--h1-resolved); border-color: var(--h1-resolved); }
+.pill.st-duplicate               { background: var(--h1-duplicate-bg); color: var(--h1-duplicate); border-color: var(--h1-duplicate); }
+.pill.st-informative             { background: var(--h1-informative-bg); color: var(--h1-informative); border-color: var(--h1-informative); }
+.pill.st-not-applicable          { background: var(--h1-not-applicable-bg); color: var(--h1-not-applicable); border-color: var(--h1-not-applicable); }
+.pill.st-spam                    { background: var(--h1-spam-bg); color: var(--h1-spam); border-color: var(--h1-spam); }
+
+.statechip.st-new                     { color: var(--h1-new); border-color: var(--h1-new); }
+.statechip.st-pending-program-review  { color: var(--h1-pending-program-review); border-color: var(--h1-pending-program-review); }
+.statechip.st-triaged                 { color: var(--h1-triaged); border-color: var(--h1-triaged); }
+.statechip.st-retesting               { color: var(--h1-retesting); border-color: var(--h1-retesting); }
+.statechip.st-resolved                { color: var(--h1-resolved); border-color: var(--h1-resolved); }
+.statechip.st-duplicate               { color: var(--h1-duplicate); border-color: var(--h1-duplicate); }
+.statechip.st-informative             { color: var(--h1-informative); border-color: var(--h1-informative); }
+.statechip.st-not-applicable          { color: var(--h1-not-applicable); border-color: var(--h1-not-applicable); }
+.statechip.st-spam                    { color: var(--h1-spam); border-color: var(--h1-spam); }
+
+
+/* Reports-by-state bars on the dashboard, same vocabulary, HackerOne's palette (--h1-*). These
+   are the BARS only - the .pill.st-* rules above still carry the app's own semantic colours,
+   because a pill sits in a table row next to lead pills drawn from the same scale and would stop
+   agreeing with them. The bars have no such neighbour: their card draws nothing but H1 states,
+   so matching H1 costs nothing and makes the card readable to anyone who knows the badges.
+   One rule per state, no grouping, so the set can be checked against REPORT_STATES. */
+.bf.s-new { background: var(--h1-new); }
+.bf.s-pending-program-review { background: var(--h1-pending-program-review); }
+.bf.s-triaged { background: var(--h1-triaged); }
+.bf.s-resolved { background: var(--h1-resolved); }
+.bf.s-duplicate { background: var(--h1-duplicate); }
+.bf.s-informative { background: var(--h1-informative); }
+.bf.s-not-applicable { background: var(--h1-not-applicable); }
+.bf.s-spam { background: var(--h1-spam); }
+
+/* A collaborator row is someone else's report - it must not read as one of ours. */
+.pill.role-reporter {
+  background: transparent; color: var(--text-mute);
+  border-color: var(--line); font-weight: 550;
+}
+.pill.role-collaborator {
+  background: var(--accent-bg); color: var(--accent); border-color: var(--accent);
+}
+table.data tbody tr.is-collab td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+
+.sevcell { display: inline-flex; align-items: baseline; gap: 6px; }
+.sevcell .cvss { font-family: var(--mono); font-size: 12px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+
+/* Right-aligned so the figures line up, and capped because a split renders as
+   "$450.00 / $900.00" - the widest string in the column sizes it for every row, including the
+   majority that show a dash. The tooltip on .money-split carries the full breakdown. */
+.cell-money { text-align: right; max-width: 128px; }
+.cell-money .money { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.money { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.money-split { color: var(--accent); cursor: help; }
+.money-split .money-of { color: var(--text-mute); font-weight: 400; font-size: 12px; }
+
+.splitlist { list-style: none; margin: 0; padding: 0; }
+.splitlist li { display: flex; gap: 8px; align-items: baseline; font-size: 12.5px; padding: 1px 0; }
+.splitlist .splitwho { font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; }
+.splitlist .splitamt { margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 650; }
+
+.jsonblock {
+  margin: 0; padding: 8px 10px; max-height: 220px; overflow: auto;
+  background: var(--bg-sunk); border: 1px solid var(--line-soft); border-radius: 6px;
+  font-family: var(--mono); font-size: 11.5px; line-height: 1.45; white-space: pre;
+}
+
+.collabs { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+
+/* -------------------------------------------------------- summary strip */
+.summary {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 14px 26px;
+  padding: 12px 14px; margin: 0; border: 0; border-bottom: 1px solid var(--line-soft);
+  border-radius: 0; box-shadow: none; background: var(--panel-2);
+}
+.sumstats { display: flex; flex-wrap: wrap; gap: 8px 26px; }
+.sumstat { display: flex; flex-direction: column; min-width: 92px; }
+.sumstat .n {
+  font-size: 19px; font-weight: 680; letter-spacing: -.02em; line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+.sumstat .k {
+  font-size: 10.5px; font-weight: 650; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--text-mute);
+}
+.sumstat .s { font-size: 11px; color: var(--text-mute); }
+
+.sumstates { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
+.statechip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 2px 4px 2px 9px; border-radius: 999px;
+  font-size: 11.5px; font-weight: 600; white-space: nowrap;
+  border: 1px solid var(--line); background: var(--panel);
+  color: var(--text-dim);
+}
+a.statechip:hover { text-decoration: none; border-color: var(--accent); }
+.statechip .sc-n {
+  font-variant-numeric: tabular-nums; font-weight: 700;
+  background: var(--panel-2); border-radius: 999px; padding: 0 7px;
+}
+.statechip.st-resolved { color: var(--ok); border-color: var(--ok); }
+.statechip.st-triaged  { color: var(--info); border-color: var(--info); }
+.statechip.st-new      { color: var(--warn); border-color: var(--warn); }
+.statechip.st-ready    { color: var(--ready); border-color: var(--ready); }
+.statechip.st-awarded  { color: var(--award); border-color: var(--award); }
+.statechip.st-muted, .statechip.st-unknown, .statechip.st-other { color: var(--text-mute); }
+/* SELECTED, on the Leads bar where a chip is a toggle rather than a one-way link. Accent is
+   what "selected" means everywhere else in the app (.navlink.active, a selected table row), and
+   it deliberately overrides the status colour: which chip is pressed has to be readable at a
+   glance across a row where four of the seven are already grey. */
+.statechip.on {
+  color: var(--accent); border-color: var(--accent); background: var(--accent-bg);
+  font-weight: 700;
+}
+/* A status with no rows behind it. Kept on screen - a bar that shows only the statuses that
+   happen to be populated cannot tell you that nothing is open - but dimmed, and rendered as a
+   span rather than a link so it never offers a click that lands on an empty list. */
+.statechip.is-zero { opacity: .45; }
+
+@media (max-width: 760px) {
+  .sumstates { margin-left: 0; }
+}
+
+/* --------------------------------------------------------- integrations */
+.intlist { display: flex; flex-direction: column; gap: 14px; }
+.integration .card-title { display: flex; align-items: center; gap: 10px; }
+.int-badge { display: inline-flex; margin-left: auto; }
+.int-status .metagrid { margin-bottom: 10px; }
+.int-out:empty { display: none; }
+.int-out { margin: 10px 0 0; }
+.int-progress { border: 1px dashed var(--accent); border-radius: 8px; background: var(--accent-bg); }
+.int-progress .loading { color: var(--accent); }
+.int-formtitle {
+  margin: 18px 0 8px; padding-top: 14px; border-top: 1px solid var(--line-soft);
+  font-size: 12px; font-weight: 650; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--text-dim);
+}
+
+/* ------------------------------------------------------------- bounty card */
+.moneycard { margin-bottom: 12px; }
+.moneytiles {
+  display: grid; gap: 10px; margin-top: 4px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+.moneytile {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--panel-2); text-decoration: none; color: inherit;
+}
+.moneytile:hover { border-color: var(--accent); text-decoration: none; }
+.mt-v { font-size: 22px; font-weight: 680; letter-spacing: -.02em; line-height: 1.2; }
+/* A row, not a bare label: it carries the award badge alongside the label now, and wraps rather
+   than pushing the badge out of a narrow tile. */
+.mt-k {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-dim);
+}
+.mt-s { font-size: 11.5px; color: var(--text-mute); }
+/* "34 / 150" on the Reports tile. The open count keeps the full weight of the other tile values
+   because it is the figure being read; the total is dimmed to a denominator so the pair scans as
+   one number with scale rather than as two competing ones. */
+.mt-open { color: var(--text); }
+.mt-of { color: var(--text-mute); font-weight: 500; }
+
+/* ====================================== anticipated (unconfirmed) awards
+   `bounty` is money HackerOne has confirmed. `expected_bounty` is the researcher's own
+   anticipation after spotting a matching advisory - a belief, not a payment.
+
+   The two must never be confusable, so anticipated money gets THREE independent visual cues:
+   a dashed (never solid) outline, the warn hue instead of the normal text colour, and italics -
+   plus a title= spelling out that HackerOne has not confirmed the payment. The DASHED BADGE is
+   the load-bearing cue and is deliberately identical in the Bounty column and the summary tally,
+   so once it is learned in one place it is recognised in the other. The literal word "expected"
+   used to be a fourth cue but read as "$783.00EXPECTED" jammed into the narrow cell, so it is
+   gone. Confirmed figures keep their plain, solid, upright treatment and are not touched here. */
+.money-expected {
+  display: inline-flex; align-items: baseline; gap: 6px;
+  padding: 1px 7px; border: 1px dashed var(--warn); border-radius: 6px;
+  background: transparent; color: var(--warn);
+  font-style: italic; font-weight: 550; cursor: help;
+}
+.money-expected .exp-amt { font-variant-numeric: tabular-nums; }
+.exp-tag {
+  font-style: normal; font-size: 9.5px; font-weight: 700; line-height: 1.6;
+  text-transform: uppercase; letter-spacing: .07em; white-space: nowrap;
+  color: var(--warn); opacity: .95;
+}
+
+/* Tracker summary strip: the anticipated total wears the SAME dashed badge as the Bounty column,
+   wrapped around the number, so the dashed outline reads as "unconfirmed" in both places. The
+   badge hugs the figure (align-self) rather than stretching down the flex column. */
+.sumstat-expected { margin-left: 4px; cursor: help; }
+.sumstat-expected .n {
+  color: var(--warn); font-style: italic;
+  border: 1px dashed var(--warn); border-radius: 6px; padding: 0 8px;
+  align-self: flex-start;
+}
+.sumstat-expected .k { color: var(--warn); }
+
+/* Filter chip on the Tracker. */
+.btn.chip-expected { border-style: dashed; border-color: var(--warn); color: var(--warn); }
+.btn.chip-expected.on { background: var(--warn-bg); border-style: solid; }
+
+/* Program scope chip. Deliberately NOT the warning colour: widening the Tracker to every program
+   is a normal thing to want, unlike an unconfirmed award, which is a caveat. */
+.btn.chip-program { border-style: dashed; border-color: var(--info); color: var(--info); }
+.btn.chip-program.on { background: var(--info-bg); border-style: solid; }
+
+/* Detail pane: the caveat sits next to the number, not in a footnote. */
+.expected-panel {
+  margin: 0 0 14px; padding: 10px 12px;
+  border: 1px dashed var(--warn); border-radius: 8px; background: var(--warn-bg);
+}
+.expected-panel .ep-head { display: flex; align-items: baseline; gap: 8px; }
+.expected-panel .ep-title {
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--warn);
+}
+.expected-panel .ep-amt {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin: 6px 0;
+}
+.expected-panel .ep-cve { font-family: var(--mono); font-size: 12px; color: var(--text-dim); }
+.expected-panel .ep-note {
+  margin: 4px 0 0; font-size: 12px; line-height: 1.5; color: var(--text-dim);
+}
+.expected-panel .ep-note.ep-own { font-style: italic; color: var(--text-mute); }
+
+/* Dashboard: a labelled rule between the confirmed tiles and the anticipated one. */
+.money-sep {
+  display: flex; flex-direction: column; gap: 1px;
+  margin: 16px 0 8px; padding-top: 10px; border-top: 1px dashed var(--warn);
+}
+.money-sep .ms-t {
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--warn);
+}
+.money-sep .ms-s { font-size: 11.5px; color: var(--text-mute); }
+.moneytiles-expected { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.moneytile-expected {
+  border-style: dashed; border-color: var(--warn); background: transparent;
+}
+.moneytile-expected:hover { border-color: var(--warn); }
+.moneytile-expected .mt-v {
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+  color: var(--warn); font-style: italic;
+}
+.moneytile-expected .mt-k { color: var(--warn); }
+/* The one place the two sums are added together - and it never stands alone as a number. */
+.money-potential {
+  margin: 8px 0 0; font-size: 11.5px; line-height: 1.5; color: var(--text-mute);
+}
+
+/* ============================================ advisory -> report match badge
+   Confidence, not certainty: only `confirmed` is solid. `likely` is an amber outline and
+   `possible` is a grey one, so an inferred match can never be skimmed as a fact. */
+.matchbadge {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line);
+  font-size: 11.5px; font-weight: 620; white-space: nowrap;
+  color: var(--text-mute); background: transparent; cursor: help;
+}
+a.matchbadge { text-decoration: none; }
+a.matchbadge:hover { text-decoration: none; filter: brightness(1.08); }
+.matchbadge .mb-dot {
+  width: 7px; height: 7px; border-radius: 50%; flex: none;
+  background: currentColor;
+}
+.matchbadge.mb-confirmed {
+  background: var(--ok); border-color: var(--ok); color: var(--accent-fg);
+  font-style: normal;
+}
+.matchbadge.mb-confirmed .mb-dot { background: var(--accent-fg); }
+.matchbadge.mb-likely {
+  background: var(--warn-bg); border-color: var(--warn); color: var(--warn);
+  font-style: italic;
+}
+.matchbadge.mb-possible {
+  background: transparent; border-color: var(--line); color: var(--text-mute);
+  border-style: dashed; font-style: italic;
+}
+
+.matchpanel {
+  margin: 0 0 14px; padding: 10px 12px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2);
+}
+.matchpanel.mp-likely, .matchpanel.mp-possible { border-style: dashed; }
+.matchpanel.mp-likely { border-color: var(--warn); }
+.matchpanel .mp-head {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
+}
+.matchpanel .mp-title {
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--text-dim);
+}
+.matchpanel .mp-note {
+  margin: 8px 0 0; font-size: 12px; line-height: 1.5; color: var(--text-dim);
+}
+.matchpanel .mp-note.mp-warn { color: var(--warn); }
+/* The matcher's own reasoning, one bullet per signal. Wraps rather than truncating: the point
+   of the list is that the reader can check the argument. */
+.matchpanel .mp-why {
+  margin: 0; padding-left: 16px; font-size: 12px; line-height: 1.5;
+}
+.matchpanel .mp-why li { margin: 0 0 2px; }
+.siglist { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+
+/* --------------------------------------------------------- privileges pill */
+/* PR:N is unauthenticated and therefore the WORST case, so it is styled hottest.
+   Ordering here is severity, not alphabetical. */
+.pill.priv-none { background: #7f1d1d; color: #fee2e2; border-color: #991b1b; }
+.pill.priv-low  { background: #713f12; color: #fef3c7; border-color: #854d0e; }
+.pill.priv-high { background: var(--panel-2); color: var(--text-dim); border-color: var(--line); }
+
+@media (prefers-color-scheme: light) {
+  .pill.priv-none { background: #fee2e2; color: #7f1d1d; border-color: #fca5a5; }
+  .pill.priv-low  { background: #fef3c7; color: #713f12; border-color: #fcd34d; }
+}
+:root[data-theme="light"] .pill.priv-none { background: #fee2e2; color: #7f1d1d; border-color: #fca5a5; }
+:root[data-theme="light"] .pill.priv-low  { background: #fef3c7; color: #713f12; border-color: #fcd34d; }
+:root[data-theme="dark"]  .pill.priv-none { background: #7f1d1d; color: #fee2e2; border-color: #991b1b; }
+:root[data-theme="dark"]  .pill.priv-low  { background: #713f12; color: #fef3c7; border-color: #854d0e; }
+
+/* --- HackerOne conversation thread (reports detail) ------------------------ */
+.thread-panel { margin-top: 14px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.th-title { display: flex; margin: 0; align-items: center; gap: 8px; padding: 8px 12px;
+            background: var(--panel2); border-bottom: 1px solid var(--line);
+            font-size: 12px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; }
+.th-count { font-weight: 500; opacity: .7; border: 1px solid var(--line);
+            border-radius: 10px; padding: 0 7px; font-size: 11px; }
+.th-list { display: flex; flex-direction: column; }
+.th-msg { padding: 10px 12px; border-top: 1px solid var(--line); }
+.th-msg:first-child { border-top: 0; }
+.th-msg.is-internal { background: var(--warn-bg); }
+.th-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+.th-actor { font-weight: 600; font-size: 13px; }
+.th-kind { font-size: 11px; padding: 0 6px; border-radius: 9px;
+           border: 1px solid var(--line); opacity: .85; }
+.th-internal { font-size: 11px; padding: 0 6px; border-radius: 9px;
+               background: var(--warn-bg); color: var(--warn); border: 1px solid var(--warn); }
+.th-at { margin-left: auto; font-size: 11px; opacity: .6; white-space: nowrap; }
+.th-body { font-size: 13px; }
+.th-body > *:first-child { margin-top: 0; }
+.th-body > *:last-child { margin-bottom: 0; }
+.th-body pre { overflow-x: auto; }
+
+/* --- status page ----------------------------------------------------------- */
+.statuscard { margin-bottom: 12px; }
+.statuscard-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.statuscard-head .card-title { margin: 0; }
+.statuscard-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+
+.hpill {
+  font-size: 11px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase;
+  padding: 2px 9px; border-radius: 10px; border: 1px solid transparent; white-space: nowrap;
+}
+.hpill.h-ok   { background: var(--ok-bg);     color: var(--ok);     border-color: var(--ok); }
+.hpill.h-warn { background: var(--warn-bg);   color: var(--warn);   border-color: var(--warn); }
+.hpill.h-bad  { background: var(--danger-bg); color: var(--danger); border-color: var(--danger); }
+
+.srows { display: flex; flex-direction: column; }
+.srow {
+  display: grid; grid-template-columns: 170px minmax(0, 1fr) auto;
+  gap: 10px; align-items: baseline;
+  padding: 6px 0; border-top: 1px solid var(--line-soft);
+}
+.srow:first-child { border-top: 0; }
+.srow-k { color: var(--text-dim); font-size: 12.5px; }
+.srow-v { font-size: 13px; min-width: 0; overflow-wrap: anywhere; }
+.srow-note { font-size: 11px; color: var(--text-mute); font-family: var(--mono); white-space: nowrap; }
+.status-note {
+  margin: -4px 0 14px; padding: 8px 12px; font-size: 12px; color: var(--text-dim);
+  background: var(--panel-2); border-left: 2px solid var(--line); border-radius: 0 6px 6px 0;
+}
+
+/* ---------------------------------------------------- polling schedule editor
+   Same two-column rhythm as .srow so the editable card does not read as a foreign panel
+   dropped into the Status page. */
+.sched-rows { display: flex; flex-direction: column; }
+/* Two columns, and the control column is a FIXED width rather than auto. With auto, each row
+   sized to its own content and the number boxes stepped raggedly down the card - which is what
+   made this look wonky. Now every "every N minutes" starts on the same x. */
+.sched-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) 190px;
+  gap: 12px; align-items: center;
+  padding: 10px 0; border-top: 1px solid var(--line-soft);
+}
+.sched-row:first-child { border-top: 0; }
+.sched-label { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sched-name { font-size: 13px; }
+.sched-desc { font-size: 11.5px; color: var(--text-mute); overflow-wrap: anywhere; }
+.sched-ctl { display: flex; align-items: center; gap: 7px; justify-content: flex-end; }
+.sched-every, .sched-unit { font-size: 12px; color: var(--text-dim); white-space: nowrap; }
+.sched-input {
+  width: 58px; padding: 5px 8px; text-align: center;
+  font-family: var(--mono); font-size: 13px; font-variant-numeric: tabular-nums;
+  color: var(--text); background: var(--panel-2);
+  border: 1px solid var(--line); border-radius: 6px;
+}
+.sched-input:focus { outline: none; border-color: var(--accent); }
+/* The spinner arrows only appear on hover/focus, so a resting row is just a number. */
+.sched-input::-webkit-inner-spin-button { opacity: 0; }
+.sched-input:hover::-webkit-inner-spin-button,
+.sched-input:focus::-webkit-inner-spin-button { opacity: 1; }
+/* Spans both columns: the explanation belongs to the row, not to the narrow control column. */
+.sched-snap {
+  grid-column: 1 / -1; margin-top: 6px;
+  font-size: 11.5px; color: var(--warn, #d9a441);
+}
+.sched-row-fixed .sched-name { color: var(--text-dim); }
+.sched-fixedwhen { font-size: 12px; color: var(--text-mute); white-space: nowrap; }
+@media (max-width: 720px) {
+  .srow { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .srow-note { white-space: normal; }
+}
+
+/* --- advisory match attribution -------------------------------------------- */
+.mp-why-block {
+  margin-top: 10px; border-top: 1px solid var(--line-soft); padding-top: 10px;
+}
+.mp-why-h {
+  font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--text-mute); margin-bottom: 6px;
+}
+.mp-why-text { margin: 0 0 6px; font-size: 13px; line-height: 1.55; }
+.mp-why-caveat { margin: 0; font-size: 12px; line-height: 1.5; color: var(--text-dim); }
+.mp-why-foot {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 8px;
+}
+.mp-score {
+  font-family: var(--mono); font-size: 11px; color: var(--text-mute);
+}
+
+/* A match that exists but earns no credit: duplicate, closed, or filed after the advisory.
+   Struck through rather than hidden - "we checked and it is not yours" is information. */
+.matchbadge.mb-nocredit .mb-t { text-decoration: line-through; opacity: .65; }
+.matchbadge.mb-nocredit { filter: grayscale(.6); }
+
+/* ------------------------------------------------- dashboard: hacktivity
+   A five-row glance at whether the program's triage team is moving. Laid out as a fixed
+   left column (what happened) plus a fixed right column (how long ago), because those two
+   are what the eye scans; the middle stretches and truncates. */
+.hacktivity { margin-bottom: 12px; }
+/* This card builds its own header so it can put the freshness pill and Refresh beside the
+   title. That nested .card-title inside a flex row lost the full-width rule every other card
+   has, which is what made it read as wonky: the divider stopped short and the text sat hard
+   against the border. The strip below restores the house header, and the inner title gives up
+   its own padding and border so the two do not double up. */
+.hacktivity .ha-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 9px 14px; border-bottom: 1px solid var(--line-soft); background: var(--panel-2);
+  border-radius: 9px 9px 0 0;
+}
+.hacktivity .ha-head .card-title { padding: 0; border-bottom: 0; }
+.hacktivity .ha-head .card-sub { margin-top: 3px; }
+/* Body inset, matching .bars on the breakdown cards. */
+.hacktivity .ha-rows,
+.hacktivity .ha-note,
+.hacktivity .ha-foot,
+.hacktivity .empty { padding-left: 14px; padding-right: 14px; }
+.hacktivity .ha-rows { padding-top: 4px; padding-bottom: 6px; }
+.hacktivity .ha-foot { margin: 0 14px; padding: 8px 0 10px; }
+.ha-head-r { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+/* Capped, not full-bleed. The card spans the dashboard, but a row stretched to that width put
+   the age at the far right edge with a stretch of empty space in front of it, so reading "how
+   long ago" meant tracking all the way across. The cap keeps the age next to the text it dates.
+   max-width, so a narrow window still shrinks below it.
+   The feed also owns the column tracks now, and each row subgrids onto them, so the columns
+   line up down the card. As a flex column of independent grids, max-content sized every row's
+   action track to its OWN label: "TRIAGED" and "CLOSED AS INFORMATIVE" began the report id in
+   two different places, which passes unnoticed in loose text but makes a rule drawn on that
+   boundary zigzag. The trade is that a short label again has space before its id, which is what
+   the old fixed 108px track was dropped for - but the rule closes that space into a column
+   instead of leaving it as a gap to track across, and max-content still caps it at the widest
+   label actually in the feed rather than the widest one possible. */
+.ha-rows {
+  display: grid; grid-template-columns: max-content 1px minmax(0, 1fr) 1px auto;
+  column-gap: 5px; max-width: 640px;
+  /* Auto rows stretch to fill a grid container taller than its content, and in the dashboard
+     split this one is a stretched flex item, so without this the rows would share out the
+     leftover height - and their height is exactly what fitHacktivityRows() measures. */
+  align-content: start;
+}
+.ha-row {
+  display: grid; grid-column: 1 / -1;
+  grid-template-columns: max-content 1px minmax(0, 1fr) 1px auto;
+  /* Dropped by anything without subgrid, which falls back to the per-row tracks above. */
+  grid-template-columns: subgrid;
+  /* 5 + the 1px rule + 5 is the 10px gap the text tracks used to have between them, and the
+     extra pixel comes off the flexible middle track, so the action and the age stay put. */
+  align-items: baseline; column-gap: 5px;
+  padding: 7px 0; border-top: 1px solid var(--line-soft); font-size: 14.5px;
+}
+.ha-row:first-child { border-top: 0; }
+/* The column rules, as two empty grid items in the 1px tracks. Not borders on the cells: the
+   cells are baseline-aligned, so a border is only as tall as that cell's line box and the pair
+   came out as ticks of two different heights. align-self:stretch sizes them to the row instead,
+   and keeps them out of the baseline group, where an empty box is measured by its bottom margin
+   edge and could have grown the row - so row height still comes from the text alone.
+   var(--line) rather than --line-soft: soft disappears against .is-mine's accent tint in the
+   light theme, and a stroke one row tall reads lighter than the full-width separator between
+   rows even at the darker value. Rules only between the three tracks, not between the spans
+   inside .ha-what: those follow variable-width ids and handles, so they sit at a different
+   offset on every row and would read as noise rather than as a column. */
+.ha-row::before, .ha-row::after { content: ''; align-self: stretch; background: var(--line); }
+.ha-row::before { grid-column: 2; }
+.ha-row::after { grid-column: 4; }
+/* Placed, not auto-flowed: the ::before comes first in box order and would take a text track. */
+.ha-act {
+  grid-column: 1;
+  font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--text-dim); white-space: nowrap;
+}
+.ha-act-money { color: var(--ok); }
+.ha-what { grid-column: 3; display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.ha-what a { font-family: var(--mono); font-size: 13.5px; }
+.ha-who { color: var(--text-mute); font-size: 13.5px; white-space: nowrap; }
+.ha-title { color: var(--text-dim); min-width: 0; }
+.ha-amt { color: var(--ok); font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* Recency is the whole point of the card, so the age gets a fixed column and never wraps.
+   Right-aligned now that the track is shared across rows: it is as wide as "120d ago", and a
+   left-aligned "3h ago" would sit adrift of the card's edge with the gap on the wrong side. */
+.ha-when {
+  grid-column: 5; text-align: right;
+  color: var(--text-mute); font-size: 13.5px; white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+/* Ours. Marked rather than filtered: the program's pace and our own outcomes are two readings
+   of the same feed and the card shows both at once. */
+.ha-row.is-mine { background: var(--accent-bg); }
+.ha-row.is-mine .ha-who { color: var(--accent); font-weight: 600; }
+/* Landed in the last hour. Declared AFTER .is-mine so that on a row which is both, freshness
+   wins the background - "this just happened" is the more perishable fact, and .is-mine still
+   reads through the accent on the handle. Background and colour only, no border or padding, so
+   marking a row cannot shift the feed or change how many rows fit the tile. */
+.ha-row.is-fresh { background: var(--ok-bg); }
+.ha-row.is-fresh .ha-when { color: var(--ok); font-weight: 650; }
+.ha-note { color: var(--text-dim); font-size: 14px; margin: 2px 0 8px; }
+.ha-foot {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  flex-wrap: wrap; margin-top: 8px; padding-top: 8px;
+  border-top: 1px solid var(--line-soft); font-size: 14px; color: var(--text-dim);
+}
+.ha-foot-k { font-weight: 650; color: var(--text); }
+
+
+/* --------------------------------------------------- per-row freshness tags
+   The tile badge says three leads moved; these say which three. Rendered against the watermark
+   in force BEFORE the section was opened, so they survive exactly one visit. */
+.titlewrap { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.titlewrap .trunc { min-width: 0; }
+.rowtag {
+  flex: none;
+  padding: 0 5px; border-radius: 3px;
+  font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+  line-height: 15px;
+}
+/* Teal for arrival, amber for change - the same two meanings the tile badges carry, so the
+   vocabulary is learned once. */
+.rowtag-new { background: var(--accent-bg); color: var(--accent); }
+.rowtag-updated { background: rgba(240, 178, 60, .16); color: var(--warn, #d9a441); }
+
+
+/* --------------------------------------------------------------- redact mode
+   For screenshots. Blurs what names a finding or a customer and leaves the numbers, which are
+   the reason the screenshot is being taken. Presentation only - the DOM still holds the real
+   text, so this hides it from a camera and from nobody else. */
+/* The conceal-btn (Programs tab) is the same control as redact-btn, so it shares every rule -
+   only the behavioural class differs, so each keeps its own on-state. */
+.redact-btn, .conceal-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; padding: 3px 0;
+  color: var(--text-mute);
+}
+.redact-glyph, .conceal-glyph { font-size: 11px; line-height: 1; opacity: .55; }
+.redact-btn:hover .redact-glyph, .conceal-btn:hover .conceal-glyph { opacity: 1; }
+.redact-btn.on, .conceal-btn.on { border-color: var(--accent); color: var(--accent); }
+.redact-btn.on .redact-glyph,
+.conceal-btn.on .conceal-glyph { opacity: 1; text-shadow: 0 0 6px var(--accent); }
+
+/* Conceal mode blurs ONLY the rows the Programs view tagged `prog-conceal` (every non-public
+   program), and only their identifying cells - name, slug and the workspace path that spells the
+   program out. Public rows and every other column stay sharp. Same blur as redact for one look. */
+body.prog-concealed tr.prog-conceal td[data-col="name"],
+body.prog-concealed tr.prog-conceal td[data-col="slug"],
+body.prog-concealed tr.prog-conceal td[data-col="workspace"] {
+  filter: blur(4.5px);
+  user-select: none;
+}
+
+/* Columns that name the finding, the program or the asset. Keyed off data-col, which the table
+   builder stamps on every cell, so a table added later is covered without touching this list. */
+body.redacted td[data-col="title"],
+body.redacted td[data-col="program"],
+body.redacted td[data-col="program_name"],
+body.redacted td[data-col="target"],
+body.redacted td[data-col="asset"],
+body.redacted td[data-col="identifier"],
+body.redacted td[data-col="name"],
+body.redacted .pane-head h2,
+body.redacted .md {
+  filter: blur(4.5px);
+  user-select: none;
+}
+/* filter applies to the whole subtree, so the cell alone is enough - naming its children too
+   would stack a second blur and turn the row to mush. Row tags, severity pills, dates, status
+   chips, ages and every money figure are deliberately absent from that list: they are the
+   reason the screenshot is being taken. */
+
+
+/* ------------------------------------------------------------ settings toggle
+   A stateful on/off button, used by the session card. Reads as pressed when on rather than
+   relying on the label alone, because the label is the only other signal and a disabled number
+   box beside it is easy to miss. */
+.toggle-btn.on { border-color: var(--accent); color: var(--accent); }
+.toggle-btn[aria-pressed="false"] { color: var(--text-mute); }
+.sched-input[disabled] { opacity: .5; cursor: not-allowed; }
+
+
+/* --------------------------------------------------------- retesting state
+   A fix has shipped and is being verified: the last in-flight state and the closest thing to a win
+   that is not one yet. Reads like triaged rather than like resolved, so a retest is never mistaken
+   for a payout. */
+.pill.st-retesting, .statechip.st-retesting {
+  background: rgba(56, 189, 248, .14); color: #38bdf8; border-color: #0ea5e9;
+}
+/* The BAR is H1's yellow while the pill above stays sky blue, and that divergence is deliberate:
+   the pill has to sit beside lead pills on the same scale, the bar only ever sits beside other H1
+   states. See the --h1-* block for the rest of the set. */
+.bf.s-retesting { background: var(--h1-retesting); }
+@media (prefers-color-scheme: light) {
+  .pill.st-retesting, .statechip.st-retesting {
+    background: #e0f2fe; color: #075985; border-color: #7dd3fc;
+  }
+}
+:root[data-theme="light"] .pill.st-retesting, :root[data-theme="light"] .statechip.st-retesting {
+  background: #e0f2fe; color: #075985; border-color: #7dd3fc;
+}
+
+/* The Updated badge on the Reports tile is its own control: it opens the Tracker sorted by what
+   moved, where the tile opens it sorted by what was filed. Only the linked variant gets the
+   affordance, so the Leads badge still reads as a label. */
+.updbadge-link { cursor: pointer; }
+.updbadge-link:hover, .updbadge-link:focus-visible { filter: brightness(1.25); }
+
+/* Copy button on every fenced block in rendered markdown. Positioned rather than inline so it
+   never joins the copied text, and only visible on hover or focus so it does not compete with the
+   code it sits on. */
+.md pre.has-copy { position: relative; }
+.md pre.has-copy .codecopy {
+  position: absolute; top: 6px; right: 6px;
+  opacity: 0; transition: opacity .12s ease;
+}
+.md pre.has-copy:hover .codecopy,
+.md pre.has-copy .codecopy:focus-visible { opacity: 1; }
+
+
+/* ==================================================================================== mobile
+   Seth reaches this from an iPhone now. Everything from here to the end of the file lives
+   inside ONE media query and applies at phone widths only: the desktop UI is not touched, and
+   the check on that is structural rather than visual - no rule outside a media query was edited
+   to make any of this work, so a desktop pixel cannot have moved.
+
+   768px, not the 900px block above. That block is the tablet step (rail becomes a strip, split
+   panes stack) and it stays exactly as it was; this one assumes a thumb, a viewport under
+   400px, and no hover at all.
+
+   The three rules everything below follows:
+     1. Anything tappable gets 44 CSS px of hit area. That is the floor, not a target.
+     2. Nothing is reachable only by hovering, because nothing here can hover.
+     3. No word is set below 12px.
+   ------------------------------------------------------------------------------------------ */
+@media (max-width: 768px) {
+
+  /* ------------------------------------------------------------------ the 12px floor
+     Grouped rather than raised rule by rule so the floor is one thing to read and one thing to
+     check. Anything already at 12px or above keeps the size it has. Code blocks are left alone:
+     they are already >= 12.3px and their line breaks are load-bearing. */
+  .tiny, .small, .pill, .tag, .exlabel, .exchip, .statechip, .privpill, .matchbadge,
+  .hpill, .rowtag, .exp-tag, .pill-planned, .jsonblock, .md-cell,
+  .metagrid .k, .pane-label, .sumstat .k, .sumstat .s, .nav-version,
+  .mt-k, .mt-s, .ms-t, .ms-s, .money-potential, .work-label, .srow-note, .sched-desc,
+  .lock, .payload-meta, .field-label, .field-hint, .login-foot, .userchip,
+  .expected-panel .ep-title, .expected-panel .ep-note, .matchpanel .mp-title, .mp-why-h,
+  .th-kind, .th-internal, .th-at, .tile .k, .result .rm, .skeleton-list li,
+  table.data thead th { font-size: 12px; }
+  body { font-size: 15px; }
+  .md { font-size: 15px; }
+
+  /* ------------------------------------------------------------------ topbar
+     Two rows: identity and controls on the first, the search box across the full width of the
+     second. On one row at 390px the four controls leave the input about 50px wide, which is not
+     a search box. Height goes to auto for the same reason. */
+  .topbar {
+    height: auto; min-height: var(--topbar-h);
+    flex-wrap: wrap; row-gap: 6px; padding: 6px 12px;
+  }
+  .globalsearch { order: 3; flex: 1 0 100%; max-width: none; }
+  .topbar-right { gap: 6px; }
+  .userchip { max-width: 38vw; }
+  .topbar .btn { min-height: 44px; padding: 8px 12px; }
+
+  /* ------------------------------------------------------------------ nav
+     A horizontal strip of tabs, scrolled with a thumb. Not a drawer: that needs a hamburger, a
+     backdrop and a focus trap, and the strip is already reachable in one gesture. The collapse
+     toggle goes, because collapsing a row is meaningless.
+
+     .shell.nav-collapsed is the remembered DESKTOP state and it OUTSCORES the plain .shell rule
+     in the 900px block, so a nav left collapsed on the desktop came back here as a 54px column
+     holding a horizontally scrolling row of single letters. Every collapsed-state rule is undone
+     below at equal specificity and later in the file, which is what makes the undo stick. */
+  .shell, .shell.nav-collapsed { grid-template-columns: minmax(0, 1fr); }
+  .nav-toggle { display: none; }
+  .sidebar { gap: 4px; padding: 6px 8px; -webkit-overflow-scrolling: touch; }
+  .navlink, .shell.nav-collapsed .navlink {
+    flex: none; gap: 0;
+    min-height: 44px; padding: 10px 14px;
+    align-items: center; justify-content: center;
+    font-size: 14px; border: 1px solid transparent;
+  }
+  .navlink.active { border-color: var(--accent); }
+  .shell.nav-collapsed .navmark { display: none; }
+  .shell.nav-collapsed .navtext {
+    max-width: none; opacity: 1; visibility: visible; pointer-events: auto; transition: none;
+  }
+  .shell.nav-collapsed .nav-version { display: block; }
+  .nav-version { margin-top: 0; align-self: center; padding: 0 8px; white-space: nowrap; }
+
+  /* ------------------------------------------------------------------ page chrome */
+  .view { padding: 12px 10px 56px; }
+  .page-head { align-items: flex-start; gap: 8px; }
+  .page-actions { margin-left: 0; flex: 1 0 100%; gap: 6px; }
+  .login { padding: 14px; }
+  .login-card { padding: 20px; }
+  .toasts { left: 12px; right: 12px; bottom: 12px; max-width: none; }
+
+  /* ------------------------------------------------------------------ tap targets
+     44 CSS px is the floor for anything that can be tapped. .exrow .btn and .btn-sm are listed
+     by name because both already beat .btn on specificity and would otherwise keep their 3px
+     padding. */
+  .btn, .btn-sm, .exrow .btn, .exchip, .statechip, .crumbs button, .sortbtn,
+  .result, .toast button, .redact-btn, .conceal-btn, .codecopy { min-height: 44px; }
+  .btn { padding: 10px 14px; font-size: 14px; }
+  .btn-sm, .exrow .btn { padding: 8px 12px; font-size: 13px; }
+  .btn-block { min-height: 48px; }
+  .redact-btn, .conceal-btn { width: auto; min-width: 44px; padding: 3px 10px; }
+  .exchip, .statechip { padding: 6px 6px 6px 12px; }
+  .crumbs { padding: 6px 8px; gap: 2px; }
+  .crumbs button { min-width: 44px; padding: 6px 8px; }
+  .toast button { min-width: 44px; }
+  /* The copy button on a fenced block was reachable only by hovering it, which is not a gesture
+     a phone has. It sits there permanently instead. */
+  .md pre.has-copy .codecopy { opacity: 1; }
+
+  /* ------------------------------------------------------------------ form controls
+     16px is not a style choice. iOS Safari zooms the whole page in when a field smaller than
+     that takes focus and does not zoom back out afterwards; every input in this app was 13px
+     and every tap on one left the layout stranded mid-zoom. */
+  input[type=text], input[type=search], input[type=password], input[type=number],
+  select, textarea { font-size: 16px; min-height: 44px; padding: 9px 11px; }
+  textarea { min-height: 200px; }
+  .filters { padding: 10px; gap: 10px; }
+  .filters .field { flex: 1 1 100%; min-width: 0; }
+  .filters .field input, .filters .field select { width: 100%; min-width: 0; }
+  .metagrid { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+  .work-row { gap: 8px; }
+  .work-label { flex: 1 0 100%; min-width: 0; }
+
+  /* ------------------------------------------------------------------ dashboard tiles
+     One column, and each tile turns on its side: the count and its label read as one line, so
+     six tiles cost six rows rather than six blocks. The badge host is pushed to the right edge,
+     which is what makes the Updated badge separable from the tile it sits inside. */
+  .tiles { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .tile { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 10px 14px; }
+  .tile .n { flex: none; min-width: 2.4em; font-size: 22px; }
+  .tile .k { flex: 1 1 auto; min-width: 0; }
+  .tile .tile-badges { margin-left: auto; }
+  .moneytiles, .moneytiles-expected { grid-template-columns: minmax(0, 1fr); }
+  .moneytile { min-height: 56px; }
+  .summary { padding: 10px 12px; gap: 10px 18px; }
+  .sumstates { margin-left: 0; gap: 6px; }
+  .excludebar { padding: 10px 12px 12px; }
+
+  /* ----------------------------------------------- the Updated badge, which did not work here
+     THE BUG. `.updbadge` ships at 9.5px with 1px of vertical padding, so the badge is about
+     14px tall against the ~44px a finger reliably lands on. It sits INSIDE the tile's own
+     anchor, so a near miss is not a miss: the tile takes the tap and navigates to the tile's
+     destination instead of the badge's. It reads as "the badge did nothing" when what actually
+     happened is that it did something else.
+
+     Two halves to the fix. The type comes up to the 12px floor, which buys about 22px. The rest
+     is a transparent pseudo-element, sized to exactly 44px and centred on the badge, so the hit
+     box grows without the badge moving or the tile reflowing.
+
+     WHY IT DOES NOT SWALLOW THE TILE. The halo grows vertically only - left/right are pinned to
+     the badge's own box - and .tile-badges is pushed to the right edge by margin-left:auto, so
+     it occupies roughly 80px at one end of a ~340px tile and everything left of that is still
+     the tile's. Vertically it is 44px inside a tile that is at least 56px, so it cannot reach
+     the tile above or below either. The two are independently reachable, which is the whole
+     point of enlarging it rather than just making the badge bigger.
+
+     ONLY `.updbadge-link` gets this. It is the only badge in the app that carries a handler -
+     the Leads copy of the Updated badge has no href, and NEW and AWARD are labels with a
+     tooltip and nothing to activate - so a halo on any of the others would intercept taps meant
+     for the tile and do nothing with them. */
+  .updbadge { font-size: 12px; padding: 3px 9px; gap: 4px; }
+  .newbadge, .awardbadge { font-size: 12px; padding: 3px 9px; }
+  .updbadge-link { position: relative; }
+  .updbadge-link::after {
+    content: '';
+    position: absolute; left: 0; right: 0; top: 50%;
+    min-width: 44px; height: 44px; margin-top: -22px;
+  }
+
+  /* ------------------------------------------------------------------ hacktivity
+     Five subgrid columns and two hairline rules do not survive a 340px card. One line for the
+     action and the age, one for what it happened to. */
+  .ha-rows, .dash-split .ha-rows { display: block; max-width: none; }
+  .ha-row {
+    display: flex; flex-wrap: wrap; align-items: baseline;
+    gap: 2px 10px; padding: 9px 0;
+  }
+  .ha-row::before, .ha-row::after { display: none; }
+  .ha-act, .ha-what, .ha-when { grid-column: auto; }
+  .ha-what { flex: 1 1 100%; flex-wrap: wrap; }
+  .ha-when { margin-left: auto; text-align: right; }
+
+  /* ------------------------------------------------------------------ tables as cards
+     Leads, Tracker, Advisories, Programs and the audit trail render one CARD per row here
+     instead of a table dragged sideways. It is driven entirely by the data-col and data-label
+     attributes the table builder stamps on every cell, so a column added later is covered
+     without touching this block.
+
+     Opt-in, via `cards` on the wrapper. A card is the right shape for a list that is READ and
+     the wrong one for a dense reference table, so the file browser, targets, payloads and
+     tokens keep .tablewrap's horizontal scroll. */
+  .tablewrap.cards { overflow-x: visible; }
+  .tablewrap.cards table.data, .tablewrap.cards table.data tbody { display: block; }
+
+  /* The header row survives as a strip of sort chips. Dropping it wholesale would remove a
+     feature rather than restyle one - there is no other way to sort. Headers with no sort
+     control behind them are dropped, because a label that cannot be pressed is noise here. */
+  .tablewrap.cards table.data thead { display: block; }
+  .tablewrap.cards table.data thead tr {
+    display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 0 10px;
+  }
+  .tablewrap.cards table.data thead th { display: none; }
+  .tablewrap.cards table.data thead th.th-sort {
+    display: block; position: static;
+    width: auto; max-width: none; padding: 0; border: 0; background: none;
+  }
+  .tablewrap.cards .sortbtn {
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: 0 14px; border: 1px solid var(--line); border-radius: 999px;
+    background: var(--panel-2); color: var(--text-dim);
+    font-size: 12px; font-weight: 650; text-transform: uppercase; letter-spacing: .04em;
+  }
+
+  .tablewrap.cards table.data tbody tr {
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: 5px 14px;
+    margin: 0 0 8px; padding: 12px 14px;
+    border: 1px solid var(--line); border-radius: 9px; background: var(--panel);
+  }
+  .tablewrap.cards table.data tbody tr:last-child { margin-bottom: 0; }
+  .tablewrap.cards table.data tbody tr.selected { border-color: var(--accent); }
+  /* One edge down the whole card rather than down one cell of it. */
+  .tablewrap.cards table.data tbody tr.is-collab { box-shadow: inset 3px 0 0 var(--accent); }
+  .tablewrap.cards table.data tbody tr.is-collab td:first-child { box-shadow: none; }
+
+  .tablewrap.cards table.data td {
+    display: flex; align-items: baseline; gap: 6px;
+    width: auto; min-width: 0; max-width: none;
+    padding: 0; border: 0;
+    font-size: 13px; white-space: normal; overflow-wrap: anywhere;
+  }
+  /* The column name in front of its value, since the header row is not there to carry it. */
+  .tablewrap.cards table.data td::before {
+    content: attr(data-label); flex: none;
+    font-size: 12px; font-weight: 650; text-transform: uppercase; letter-spacing: .04em;
+    color: var(--text-mute);
+  }
+  /* A cell with nothing in it prints nothing, label included. dataTable appends an empty value
+     as no child at all rather than as an empty text node, which is what makes :empty match. */
+  .tablewrap.cards table.data td:empty { display: none; }
+  /* The title is the card's headline: full width, no label in front of it, and it WRAPS. The
+     ellipsis exists to protect a column width, and there are no columns here. */
+  .tablewrap.cards table.data td[data-col="title"],
+  .tablewrap.cards table.data td[data-col="name"] {
+    flex: 1 0 100%; font-size: 15px; font-weight: 600; line-height: 1.35;
+  }
+  .tablewrap.cards table.data td[data-col="title"]::before,
+  .tablewrap.cards table.data td[data-col="name"]::before { content: none; }
+  /* An audit detail is a rendered markdown block: it keeps its label but takes the full width. */
+  .tablewrap.cards table.data td[data-col="detail"] { flex: 1 0 100%; }
+  .tablewrap.cards .trunc { white-space: normal; overflow: visible; text-overflow: clip; }
+  .tablewrap.cards .titlewrap { flex-wrap: wrap; }
+
+  /* Tables that were NOT converted keep the sideways scroll, with room to land on a row. */
+  table.data th, table.data td { padding: 10px 8px; }
+  .pager { padding: 10px 12px; gap: 8px 12px; }
+  .pager .spacer { display: none; }
+  .pager .btn { flex: 1 1 auto; }
+
+  /* ------------------------------------------------------------------ list vs detail
+     Two screens, not two columns. Stacked, the pane sat UNDER the list, so opening a row meant
+     scrolling past the other forty-nine to reach the one just tapped. The list is hidden while
+     a pane is open and the pane's own Close button is the way back; render() and the audit
+     card's drawPane() put the new screen at the top on the way in and out. */
+  .split:not(.no-detail) > .pane:first-child { display: none; }
+  .pane-head { padding: 10px 12px; gap: 8px; }
+  .pane-head .pane-actions { margin-left: 0; flex: 1 0 100%; }
+  .pane-body { padding: 12px; }
+  .md pre.code code { font-size: 13px; }
+  /* Same treatment the 620px block gives it: the hanging indent on a lead's header block is
+     wider than the screen it would hang into. */
+  .md ul.fields li { padding-left: 0; text-indent: 0; }
+  .md ul.fields .fk { display: block; width: auto; margin: 0; }
+
+  /* ------------------------------------------------------------------ status + certificates
+     Both already stack, at 720px and 620px, which leaves a band between there and 768 where
+     they do not. Repeated here so the phone layout does not depend on which of three
+     breakpoints happens to be lowest. */
+  .srow { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .srow-note { white-space: normal; }
+  .certrow { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .sched-row { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .sched-ctl { justify-content: flex-start; }
+  .sched-input { width: 76px; }
+  .statuscard-actions { gap: 6px; }
+}
+
+/* ------------------------------------------------------- MOBILE, second pass
+   Written against real use on an iPhone rather than guessed. Three complaints, three fixes, all
+   inside the 768px block so the desktop layout is untouched. */
+@media (max-width: 768px) {
+  /* 1. The global search bar ate a whole row of a small screen. Search is still reachable two
+     ways without it: the button in the Dashboard's page actions, and the per-tab Search button
+     beside Refresh on every list view. NOTE: this comment used to say the nav carried a Search
+     entry. It has not since 2026-08-02, and the behaviour was right while the stated reason was
+     wrong - which is the kind of drift that survives because nobody re-reads a comment. */
+  .globalsearch { display: none; }
+
+  /* 2. Clicking a single lead used to open with the filter card - Search, Target, Class, Status -
+     above the thing that was clicked, so the lead itself started below the fold. Filters are for
+     choosing FROM a list; once one row is chosen they are noise. `:has()` keeps this CSS-only, and
+     iOS Safari has supported it since 15.4. The list pane is hidden by the rule above, and the nav
+     strip is how you get back to it. */
+  .view:has(.split:not(.no-detail)) .filters { display: none; }
+
+  /* 3. `Reports by state` and everything under it ran off the right edge with no way to scroll to
+     it. The cause is not the content: a `1fr` grid track refuses to shrink below its contents'
+     min-content width, so one long label widens the whole card past the viewport. `minmax(0, 1fr)`
+     is the fix, and it has to be applied at every nesting level or the innermost one still wins. */
+  .dash-split, .dash-col, .cards3, .tiles, .moneytiles, .moneytiles-expected {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .dash-col, .dash-col > .card, .cards3 > .card, .card, .pane { min-width: 0; }
+  .bars { padding: 10px 12px; }
+  .barrow { grid-template-columns: minmax(0, 42%) minmax(0, 1fr) auto; gap: 8px; }
+  .barrow .bl, .barrow .bt { min-width: 0; }
+  /* Belt and braces: nothing in a view may push the page sideways. If a table or a code block
+     genuinely needs the width it scrolls inside its own wrapper, which .tablewrap already does. */
+  .view, .card, .dash-split, .dash-col { max-width: 100%; overflow-wrap: anywhere; }
+}
+
+/* --------------------------------------------- MOBILE, search moves to a button
+   The per-tab filter card is four controls deep on a phone and search is the only one reached
+   often. It moves next to the other page actions, the same way on every tab, and reveals the
+   field it belongs to. The button does not exist on desktop, where the card is already visible. */
+.mobile-search-toggle, .mobile-sort-toggle { display: none; }
+
+@media (max-width: 768px) {
+  /* DASHBOARD ORDER ON A PHONE. Source order puts the Bounty card first, which is right on a
+     desktop where everything is visible at once. On a phone it pushed Leads, Reports and
+     Advisories below the fold, so the first thing on the screen was a number that does not change
+     between visits rather than the three counts that do.
+
+     Reordering in CSS rather than in the DOM keeps the desktop byte-identical and keeps one
+     build order in app.js. Everything not named here keeps its source position, because flex
+     preserves source order within an equal `order` value - so the breakdowns and hacktivity stay
+     where they were, after both. */
+  .dash-host { display: flex; flex-direction: column; }
+  .dash-host > * { order: 3; }
+  .dash-host > .tiles { order: 1; }
+  .dash-host > .moneycard { order: 2; }
+
+  /* The running build, in the topbar between the gem and the username. The sidebar's copy is
+     unreachable on a phone: the rail becomes a horizontally scrolling tab strip and the version
+     scrolls off the end, so the build was unidentifiable exactly when it gets asked about. */
+  .topversion {
+    display: inline-block; font-size: 12px; color: var(--muted);
+    letter-spacing: 0.02em; white-space: nowrap; flex: 0 0 auto;
+  }
+  /* Only one copy on screen. The rail's is the desktop's and is hidden here rather than left to
+     scroll off, which is what made it look like the version was missing altogether. */
+  .nav-version, .shell.nav-collapsed .nav-version { display: none; }
+
+  .mobile-search-toggle, .mobile-sort-toggle { display: inline-flex; }
+
+  /* THE LIST CARD ON A PHONE: rows first, controls behind buttons.
+     The Tracker read pane-head, then a bounty tally, then state chips, then exclusion chips,
+     then the rows - so the thing the page is named after started most of a screen down, behind
+     three blocks of controls. Order puts the rows directly under the heading; everything else
+     keeps its source position after them, because flex preserves source order within an equal
+     `order` value. */
+  .pane.card { display: flex; flex-direction: column; }
+  .pane.card > * { order: 3; }
+  .pane.card > .pane-head { order: 1; }
+  .pane.card > .tablewrap { order: 2; }
+
+  /* The bounty tally is a desktop figure. On a phone it is three big numbers that do not change
+     between visits, sitting on top of the queue they describe. The state chips in the same
+     section are FILTERS and are kept, behind the toggle. */
+  .pane.card .summary .sumstats { display: none; }
+  .pane.card .summary { padding-top: 0; }
+
+  /* Filters collapsed by default, revealed by the Filters button. `q-open` lands on the list
+     card for a `filterBar: false` view and on the strip for every other view - one class, two
+     homes, see mobileToggleLabel() in app.js. */
+  .pane.card > .summary, .pane.card > .excludebar { display: none; }
+  .pane.card.q-open > .summary { display: flex; }
+  .pane.card.q-open > .excludebar { display: block; }
+  /* When they ARE revealed, they must sit ABOVE the rows, not keep the order:3 that lands them
+     after the whole table. On the Tracker (a filterBar:false view, so its only controls are these
+     chips) the toggle otherwise looked dead: you tapped it at the top of the screen and the chips
+     appeared below the entire table, off-screen. order:1 puts them right under the heading, ahead
+     of the rows, while the group's source order (head, summary, excludebar) is preserved. Closed,
+     they are display:none and the rows still lead. */
+  .pane.card.q-open > .summary, .pane.card.q-open > .excludebar { order: 1; }
+
+  /* The sort row is the only way to re-sort in card mode, and it was permanently occupying the
+     top of the list. Same treatment. */
+  .tablewrap.cards table.data thead { display: none; }
+  .pane.card.sort-open .tablewrap.cards table.data thead { display: block; }
+
+  /* THE WHOLE CARD COLLAPSES, not just the search field. Target, Class and Status are three
+     full-width selects on a phone, and on Leads they pushed the first lead most of a screen
+     down for controls that are reached rarely. Hiding the card rather than the fields inside it
+     also avoids leaving Apply and Reset stranded above an empty strip.
+
+     Hidden until asked for, EXCEPT when a filter is already applied - otherwise the list would be
+     filtered with nothing on screen saying why. `.q-open` is set on load in that case, and it
+     means "the card is open" rather than anything specific to the query field. */
+  .filters { display: none; }
+  .filters.q-open { display: flex; }
+  .filters.q-open .field-q { display: flex; }
+  .filters.q-open .field-q input { min-height: 44px; }
+  /* A select the width of the card is easier to hit than three squeezed onto one row, and it
+     stops a long target name forcing the strip sideways. font-size 16px is the iOS Safari
+     threshold below which focusing an input zooms the whole viewport, which reads as the page
+     "glitching" the instant you tap the revealed search box. */
+  .filters.q-open .field { width: 100%; }
+  .filters.q-open .field select, .filters.q-open .field input {
+    width: 100%; min-height: 44px; font-size: 16px;
+  }
+}
+
+/* The report body ends in Remediation, so without a rule the first comment reads as another
+   Remediation bullet. This is the seam between what we wrote and what they said back. */
+.thread-rule {
+  border: 0; border-top: 1px solid var(--line); margin: 22px 0 18px;
+}

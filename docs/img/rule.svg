@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 18" width="880" height="18" role="img"
+     aria-label="">
+  <line x1="0" y1="9" x2="404" y2="9" stroke="#37c2a8" stroke-width="1" opacity="0.35"/>
+  <line x1="476" y1="9" x2="880" y2="9" stroke="#37c2a8" stroke-width="1" opacity="0.35"/>
+  <g transform="translate(428 2) scale(0.62)">
+    <path d="M7 3h10l4.5 6L12 21.5 2.5 9z" fill="none" stroke="#37c2a8" stroke-width="2"
+          stroke-linejoin="round"/>
+    <path d="M2.5 9h19" stroke="#37c2a8" stroke-width="2" opacity="0.75"/>
+  </g>
+</svg>

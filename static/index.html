@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<!-- Title, brand, login heading and favicon are all set at boot from the server's
+     `app_name` (GET /api/health). These are placeholders only. See RENAME.md. -->
+<title>Console</title>
+<link rel="icon" type="image/svg+xml" href="data:,">
+<link rel="stylesheet" href="app.css">
+<!-- app.js is loaded (not deferred) in <head> so the stored theme is applied to <html>
+     before first paint. Everything else in it waits for DOMContentLoaded.
+     CSP: strict. No inline <script>, no <style>, no style="" attributes, no on* attributes. -->
+<script src="app.js"></script>
+</head>
+<body>
+
+<!-- ------------------------------------------------------------- boot -->
+<div id="boot" class="boot">
+  <div class="boot-inner">
+    <div class="spinner" aria-hidden="true"></div>
+    <p class="boot-msg">Starting&hellip;</p>
+  </div>
+</div>
+
+<!-- ------------------------------------------------------------- login -->
+<div id="login" class="login" hidden>
+  <form id="login-form" class="login-card card" autocomplete="on">
+    <h1 class="login-title">Console</h1>
+    <p class="login-sub">Vulnerability research console. Sign in to continue.</p>
+
+    <label class="field">
+      <span class="field-label">Username</span>
+      <input id="login-user" name="username" type="text" autocomplete="username" required autocapitalize="none" spellcheck="false">
+    </label>
+
+    <label class="field">
+      <span class="field-label">Password</span>
+      <input id="login-pass" name="password" type="password" autocomplete="current-password" required>
+    </label>
+
+    <div id="login-error" class="alert alert-error" hidden></div>
+
+    <button id="login-submit" class="btn btn-primary btn-block" type="submit">Sign in</button>
+
+    <p class="login-foot">Session cookie is <code>HttpOnly</code> + <code>SameSite=Strict</code>.</p>
+  </form>
+</div>
+
+<!-- ------------------------------------------------------------- app -->
+<div id="app" class="app" hidden>
+
+  <header class="topbar">
+    <a class="brand" href="#/dashboard">
+      <!-- A brilliant-cut gem: a quarry is both the place a valuable thing is extracted from
+           and the thing being hunted, which is the whole job. Inline rather than a file so there
+           is no second request and no CDN, and stroked in currentColor so it follows the theme
+           and the accent without a second copy for dark mode. -->
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+             stroke-linejoin="round" stroke-linecap="round">
+          <path d="M7 3h10l4.5 6L12 21.5 2.5 9z"/>
+          <path d="M2.5 9h19"/>
+          <path d="M7 3 9.5 9 12 21.5 14.5 9 17 3"/>
+        </svg>
+      </span>
+      <span class="brand-text">Console</span>
+    </a>
+
+    <!-- The version also renders bottom-left in the sidebar rail. On a phone that rail becomes a
+         horizontally scrolling tab strip, so it scrolls out of view and the running build is
+         unidentifiable - which is exactly when it is most likely to be asked about. This copy
+         sits in the topbar and is shown on phones only; the desktop keeps the rail's. -->
+    <span id="topversion" class="topversion" title="Running build"></span>
+
+    <form id="globalsearch" class="globalsearch" role="search">
+      <label class="sr-only" for="globalsearch-input">Search everything</label>
+      <input id="globalsearch-input" type="search" placeholder="Search everything&hellip;  (press /)" autocomplete="off" spellcheck="false">
+      <button class="btn btn-quiet" type="submit">Search</button>
+    </form>
+
+    <div class="topbar-right">
+      <span id="userchip" class="userchip" title="Signed in user"></span>
+      <button id="themebtn" class="btn btn-quiet" type="button" title="Cycle theme: auto / light / dark">Theme</button>
+      <button id="logoutbtn" class="btn btn-quiet" type="button">Log out</button>
+    </div>
+  </header>
+
+  <div class="shell">
+    <nav id="nav" class="sidebar" aria-label="Primary"></nav>
+    <main id="view" class="view" tabindex="-1"></main>
+  </div>
+
+</div>
+
+<div id="toasts" class="toasts" role="status" aria-live="polite"></div>
+
+</body>
+</html>
