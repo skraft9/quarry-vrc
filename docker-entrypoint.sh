@@ -57,21 +57,21 @@ PY
 fi
 
 # 2. Bootstrap / reset the admin login from the env password (idempotent).
-printf '%s\n' "$QUARRY_ADMIN_PASSWORD" | python3 /app/server.py --adduser "${QUARRY_ADMIN_USER:-admin}" --password-stdin
+printf '%s\n' "$QUARRY_ADMIN_PASSWORD" | python3 /app/core/server.py --adduser "${QUARRY_ADMIN_USER:-admin}" --password-stdin
 
 # 3. TLS: self-signed local CA on first boot unless the operator mounted their own cert.
 if [ "${QUARRY_TLS_MODE:-self-signed}" = "self-signed" ] && [ ! -f "$DATA_DIR/tls/cert.pem" ]; then
   echo "first boot: generating self-signed TLS material"
-  python3 /app/server.py --gencert
+  python3 /app/core/server.py --gencert
 fi
 
 # 4. Schema + index whatever markdown is already in the workspace volume.
-python3 /app/ingest.py --rebuild || true
+python3 /app/core/ingest.py --rebuild || true
 
 # 5. Seed the advisory feeds so the Advisories tab is not empty on first load. Backgrounded on
 # purpose: the feeds are a network call and must not delay the server binding its port. It creates
 # its own schema, is idempotent, and the tab's Refresh re-runs the same sync by hand thereafter.
-( python3 /app/advisories.py --sync || true ) &
+( python3 /app/core/advisories.py --sync || true ) &
 
 # 6. Seed the payload arsenal in the background so the Payloads tab and its dashboard tally are
 # populated on first load. The reference is a large git repo, so the clone must not block the
@@ -79,4 +79,4 @@ python3 /app/ingest.py --rebuild || true
 ( /app/scripts/sync-payloads.sh "$PAYLOADS_DIR" || true ) &
 
 echo "Quarry VRC starting on https://0.0.0.0:${PORT}/ (published)"
-exec python3 /app/server.py
+exec python3 /app/core/server.py
