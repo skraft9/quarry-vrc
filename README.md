@@ -12,8 +12,7 @@
 ![Scope Management](https://img.shields.io/badge/Program-Scope_Management-fd7e14)
 
 [![Created by @skraft9](https://img.shields.io/badge/Created_by-%40skraft9-228B22)](https://github.com/skraft9) &nbsp;
-[![Built with Claude Code](https://img.shields.io/badge/Built_with-Claude_Code-D97757?logo=claude&logoColor=white)](https://claude.com/claude-code) &nbsp;
-![Built for Agentic AI](https://img.shields.io/badge/Built_for-Agentic_AI-D97757?logo=claude&logoColor=white)
+[![Built with Claude Code](https://img.shields.io/badge/Built_with-Claude_Code-D97757?logo=claude&logoColor=white)](https://claude.com/claude-code)
 
 `Python` &nbsp;&middot;&nbsp; `JavaScript` &nbsp;&middot;&nbsp; `CSS` &nbsp;&middot;&nbsp; `Docker` &nbsp;&middot;&nbsp; `SQLite` &nbsp;&middot;&nbsp; `Apache-2.0`
 
