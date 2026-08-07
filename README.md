@@ -4,8 +4,6 @@
 
 <br>
 
-**A console for vulnerability research at scale.**
-
 [![HackerOne Integration](https://img.shields.io/badge/HackerOne_Integration-494649?logo=hackerone&logoColor=white&style=for-the-badge)](https://api.hackerone.com/)
 
 ![Report Tracker](https://img.shields.io/badge/Report-Tracker-6f42c1) &nbsp;
