@@ -72,21 +72,21 @@ Most of this happens through the UI, but the same operations run on the CLI insi
 
 ```bash
 # Sync your reports, bounties, states and triage threads from HackerOne
-python3 h1.py --sync
+python3 core/h1.py --sync
 
 # Sync each program's guidelines, scopes and visibility
-python3 h1.py --sync-programs
+python3 core/h1.py --sync-programs
 
 # Submit a finished report (prints the payload; add --confirm to actually send it)
-python3 h1.py --submit reports/<slug>.md --program <handle> \
+python3 core/h1.py --submit reports/<slug>.md --program <handle> \
   --weakness cwe-79 --scope "<in-scope asset>" --severity high
 
 # Rebuild the lead and report index from your workspace Markdown
-python3 ingest.py --rebuild
+python3 core/ingest.py --rebuild
 
 # Refresh the advisory feeds, and search the payload library
-python3 advisories.py --sync
-python3 payloads.py --search "jwt none"
+python3 core/advisories.py --sync
+python3 core/payloads.py --search "jwt none"
 ```
 
 ### Updating

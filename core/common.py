@@ -33,14 +33,15 @@ ENV_DB = "APP_DB"
 ENV_UPLOADS = "APP_UPLOADS"
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(APP_DIR)  # repo root: static/, config, data, tls live here
 SCHEMA_PATH = os.path.join(APP_DIR, "schema.sql")
-STATIC_DIR = os.path.join(APP_DIR, "static")
-UPLOAD_DIR = os.environ.get(ENV_UPLOADS) or os.path.join(APP_DIR, "uploads")
+STATIC_DIR = os.path.join(ROOT_DIR, "static")
+UPLOAD_DIR = os.environ.get(ENV_UPLOADS) or os.path.join(ROOT_DIR, "uploads")
 
 # APP_CONFIG / APP_DB let the test harness point at a throwaway config and database so tests can
 # never touch live data. Unset in normal operation.
-CONFIG_PATH = os.environ.get(ENV_CONFIG) or os.path.join(APP_DIR, "config.json")
-_DEFAULT_DB = os.path.join(APP_DIR, "index.db")
+CONFIG_PATH = os.environ.get(ENV_CONFIG) or os.path.join(ROOT_DIR, "config.json")
+_DEFAULT_DB = os.path.join(ROOT_DIR, "index.db")
 
 
 def db_path(cfg=None):
@@ -50,7 +51,7 @@ def db_path(cfg=None):
         return env
     if cfg and cfg.get("db_path"):
         p = cfg["db_path"]
-        return p if os.path.isabs(p) else os.path.join(APP_DIR, p)
+        return p if os.path.isabs(p) else os.path.join(ROOT_DIR, p)
     return _DEFAULT_DB
 
 
@@ -251,8 +252,8 @@ DEFAULT_CONFIG = {
     "db_path": "index.db",
     "bind_host": "127.0.0.1",
     "bind_port": 8443,
-    "tls_cert": os.path.join(APP_DIR, "tls", "cert.pem"),
-    "tls_key": os.path.join(APP_DIR, "tls", "key.pem"),
+    "tls_cert": os.path.join(ROOT_DIR, "tls", "cert.pem"),
+    "tls_key": os.path.join(ROOT_DIR, "tls", "key.pem"),
     # 0 means the session never expires. See auth.NEVER_EXPIRES and the Settings tab; the app
     # binds to loopback and has one operator, so being logged out on a timer bought nothing.
     "session_hours": 0,
