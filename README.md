@@ -33,7 +33,7 @@ Quarry syncs and submits through the HackerOne API. Other platforms are not supp
 
 - **Your entire hunt on one board.** Sync every report, program, bounty and triage thread from the
   HackerOne API, so the console mirrors your real hunting instead of a spreadsheet you patch by hand.
-- **Find it, draft it, submit it.** File a finished report to a program with one click, then watch
+- **Find it, draft it, submit it.** File a finished report using the HackerOne API, then watch
   its state and bounty flow straight back into the Tracker.
 - **A researcher's arsenal, built in.** Full-text search across every lead, report and payload, a
   payload library cloned from PayloadsAllTheThings, and live CVE/CVSS advisory feeds cross-referenced
@@ -241,7 +241,9 @@ House rules:
 - Both test suites green before a PR.
 - Never commit a secret (`.gitignore` covers the known ones).
 - ASCII punctuation only.
-- Versions run on the `1.x` line and move up; the official launch opens the `2.0` train.
+- Versions run on the `1.x` line and move up.
+- New features increment up 1.x.0
+- New fixes increments up 1.0.x
 
 <img src="docs/img/rule.svg" alt="" width="100%">
 
