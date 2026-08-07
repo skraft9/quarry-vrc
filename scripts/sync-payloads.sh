@@ -37,4 +37,4 @@ else
   git -C "$ROOT" reset --hard -q FETCH_HEAD
 fi
 
-python3 "$APP_DIR/payloads.py" --rebuild --root "$ROOT"
+python3 "$APP_DIR/core/payloads.py" --rebuild --root "$ROOT"
