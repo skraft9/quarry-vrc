@@ -21,6 +21,20 @@
 
 <img src="docs/img/rule.svg" alt="" width="100%">
 
+---
+
+<img width="3786" height="1726" alt="Screenshot 2026-08-06 233434" src="https://github.com/user-attachments/assets/5f698813-1e33-45b2-beb7-7388010b3877" />
+
+---
+
+<img width="3796" height="1728" alt="Screenshot 2026-08-06 235412" src="https://github.com/user-attachments/assets/1d99fed7-d2c7-496c-baf8-a2cfd0836bfe" />
+
+---
+
+<img width="3800" height="1743" alt="Screenshot 2026-08-06 233713" src="https://github.com/user-attachments/assets/29918b8c-fcb4-469e-a56f-31bd9a0d062d" />
+
+---
+
 ## <img src="docs/img/gem-sm.svg" width="18" align="top" alt=""> Supported Bug Bounty Platforms
 
 - **HackerOne**
