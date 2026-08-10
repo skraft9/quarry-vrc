@@ -50,6 +50,11 @@ try:
 except Exception:  # pragma: no cover
     schedule_mod = None
 
+try:
+    import screenshot as screenshot_mod
+except Exception:  # pragma: no cover
+    screenshot_mod = None
+
 
 # ====================================================================== helpers
 def _json_default(o):
@@ -1382,6 +1387,128 @@ def r_upload(ctx, m):
             "filed_to": filed_to, "sha256": digest, "size": len(data)}
 
 
+# ---------------------------------------------------------------- screenshot
+@route("GET", r"/api/screenshot/backends")
+def r_screenshot_backends(ctx, m):
+    """Which screenshot backends are reachable right now."""
+    if not screenshot_mod:
+        raise HttpError(503, "screenshot module unavailable")
+    return screenshot_mod.detect_backends()
+
+
+@route("POST", r"/api/screenshot", scope="write")
+def r_screenshot(ctx, m):
+    """Capture a screenshot via one of the available backends.
+
+    Body fields:
+      backend      'auto' | 'caido' | 'burp' | 'os'  (default: auto)
+      target       workspace target slug
+      name         label for the filename
+      request_id   Caido request id (for caido backend)
+      item_index   Burp history index (for burp backend)
+      mode         'interactive' | 'fullscreen' | 'window' (for os backend)
+      caido_url    override Caido API URL
+      burp_url     override Burp API URL
+      caido_token  Caido auth token
+    """
+    if not screenshot_mod:
+        raise HttpError(503, "screenshot module unavailable")
+    b = ctx.body or {}
+    try:
+        result = screenshot_mod.capture(
+            backend=b.get("backend", "auto"),
+            target_slug=b.get("target"),
+            name=b.get("name"),
+            request_id=b.get("request_id"),
+            item_index=b.get("item_index"),
+            mode=b.get("mode", "interactive"),
+            caido_url=b.get("caido_url"),
+            burp_url=b.get("burp_url"),
+            caido_token=b.get("caido_token"),
+            conn=ctx.conn,
+        )
+    except RuntimeError as e:
+        raise HttpError(400, str(e))
+    common.audit(ctx.conn, ctx.user, "screenshot", "upload",
+                 result.get("upload_id"), result.get("path"), ctx.remote)
+    return result
+
+
+@route("GET", r"/api/evidence/(\w[\w-]*)")
+def r_evidence_list(ctx, m):
+    """List all evidence files for a target workspace."""
+    if not screenshot_mod:
+        raise HttpError(503, "screenshot module unavailable")
+    target = m.group(1)
+    files = screenshot_mod.collect_evidence(target)
+    return {"target": target, "files": files, "count": len(files),
+            "total_bytes": sum(f["size"] for f in files)}
+
+
+@route("GET", r"/api/evidence/(\w[\w-]*)/timeline")
+def r_evidence_timeline(ctx, m):
+    """Build an evidence timeline for a target workspace."""
+    if not screenshot_mod:
+        raise HttpError(503, "screenshot module unavailable")
+    target = m.group(1)
+    ref = ctx.q("ref")
+    result = screenshot_mod.build_timeline(target, lead_ref=ref)
+    return result
+
+
+@route("POST", r"/api/evidence/(\w[\w-]*)/timeline", scope="write")
+def r_evidence_timeline_export(ctx, m):
+    """Export the evidence timeline as a markdown file."""
+    if not screenshot_mod:
+        raise HttpError(503, "screenshot module unavailable")
+    target = m.group(1)
+    ref = (ctx.body or {}).get("ref") or ctx.q("ref")
+    try:
+        path = screenshot_mod.export_timeline(target, lead_ref=ref)
+    except RuntimeError as e:
+        raise HttpError(400, str(e))
+    common.audit(ctx.conn, ctx.user, "timeline_export", "evidence", None, path, ctx.remote)
+    return {"ok": True, "path": path, "filename": os.path.basename(path)}
+
+
+@route("POST", r"/api/evidence/(\w[\w-]*)/feed", scope="write")
+def r_evidence_feed(ctx, m):
+    """Pull matching proxy traffic for a target and save as evidence.
+
+    Body fields:
+      backend      'auto' | 'caido' | 'burp'
+      hosts        list of hostnames to filter (overrides scope lookup)
+      limit        max items to pull (default: 20)
+      caido_url    override Caido API URL
+      burp_url     override Burp API URL
+      caido_token  Caido auth token
+    """
+    if not screenshot_mod:
+        raise HttpError(503, "screenshot module unavailable")
+    target = m.group(1)
+    b = ctx.body or {}
+    hosts = b.get("hosts")
+    if isinstance(hosts, str):
+        hosts = [h.strip() for h in hosts.split(",") if h.strip()]
+    try:
+        result = screenshot_mod.proxy_feed(
+            target_slug=target,
+            backend=b.get("backend", "auto"),
+            hosts=hosts,
+            limit=min(int(b.get("limit", 20)), 100),
+            caido_url=b.get("caido_url"),
+            burp_url=b.get("burp_url"),
+            caido_token=b.get("caido_token"),
+            conn=ctx.conn,
+        )
+    except RuntimeError as e:
+        raise HttpError(400, str(e))
+    common.audit(ctx.conn, ctx.user, "proxy_feed", "evidence", None,
+                 "%s: %d captured via %s" % (target, result["count"], result["backend"]),
+                 ctx.remote)
+    return result
+
+
 # ---------------------------------------------------------------- tracker
 TRACKER_PATH = os.environ.get("QUARRY_TRACKER_MD") or ""
 
@@ -1981,6 +2108,11 @@ try:
 except Exception:
     h1_mod = None
 
+try:
+    import h1_graphql as h1_gql
+except Exception:
+    h1_gql = None
+
 
 @route("GET", r"/api/integrations/hackerone")
 def r_h1_status(ctx, m):
@@ -2109,6 +2241,152 @@ def r_h1_program_add(ctx, m):
     common.audit(ctx.conn, ctx.user, "program_add", "programs", handle,
                  "onboarded %s (created=%s)" % (handle, res.get("created")), ctx.remote)
     return res
+
+
+# ------------------------------------------------------- H1 GraphQL (invitations + collabs)
+
+def _need_gql():
+    if not h1_gql:
+        raise HttpError(503, "h1_graphql module unavailable")
+    return h1_gql
+
+
+@route("GET", r"/api/integrations/hackerone/session")
+def r_h1_session_status(ctx, m):
+    """Session token state. NEVER returns the token, only a mask."""
+    gql = _need_gql()
+    return gql.status()
+
+
+@route("PUT", r"/api/integrations/hackerone/session", scope="write")
+def r_h1_session_set(ctx, m):
+    """Store the HackerOne session cookie. Verified before saving."""
+    gql = _need_gql()
+    b = ctx.body or {}
+    token = (b.get("session_token") or "").strip()
+    if not token:
+        raise HttpError(400, "session_token is required")
+    try:
+        probe = gql.test_session(session_token=token)
+    except gql.GQLError as e:
+        raise HttpError(400, str(e))
+    gql.set_session(token)
+    common.audit(ctx.conn, ctx.user, "h1_session_set", "hackerone", None,
+                 "verified as %s" % probe.get("username", "?"), ctx.remote)
+    out = gql.status()
+    out["verified"] = probe
+    return out
+
+
+@route("GET", r"/api/h1/invitations")
+def r_h1_invitations(ctx, m):
+    """Pending private program invitations."""
+    gql = _need_gql()
+    try:
+        return gql.list_program_invitations()
+    except gql.GQLError as e:
+        raise HttpError(502, str(e))
+
+
+@route("POST", r"/api/h1/invitations/accept", scope="write")
+def r_h1_invitation_accept(ctx, m):
+    """Accept a program invitation."""
+    gql = _need_gql()
+    token = ((ctx.body or {}).get("token") or "").strip()
+    if not token:
+        raise HttpError(400, "token is required")
+    try:
+        result = gql.accept_program_invitation(token)
+    except gql.GQLError as e:
+        raise HttpError(400, str(e))
+    common.audit(ctx.conn, ctx.user, "h1_invite_accept", "program", None,
+                 "token=%s..." % token[:12], ctx.remote)
+    return result
+
+
+@route("POST", r"/api/h1/invitations/reject", scope="write")
+def r_h1_invitation_reject(ctx, m):
+    """Reject a program invitation."""
+    gql = _need_gql()
+    token = ((ctx.body or {}).get("token") or "").strip()
+    if not token:
+        raise HttpError(400, "token is required")
+    try:
+        result = gql.reject_program_invitation(token)
+    except gql.GQLError as e:
+        raise HttpError(400, str(e))
+    common.audit(ctx.conn, ctx.user, "h1_invite_reject", "program", None,
+                 "token=%s..." % token[:12], ctx.remote)
+    return result
+
+
+@route("GET", r"/api/h1/collabs")
+def r_h1_collabs(ctx, m):
+    """Pending report collaboration invitations."""
+    gql = _need_gql()
+    try:
+        return gql.list_collab_invitations()
+    except gql.GQLError as e:
+        raise HttpError(502, str(e))
+
+
+@route("POST", r"/api/h1/collabs/accept", scope="write")
+def r_h1_collab_accept(ctx, m):
+    """Accept a collaboration invitation."""
+    gql = _need_gql()
+    token = ((ctx.body or {}).get("token") or "").strip()
+    if not token:
+        raise HttpError(400, "token is required")
+    try:
+        result = gql.accept_collab_invitation(token)
+    except gql.GQLError as e:
+        raise HttpError(400, str(e))
+    common.audit(ctx.conn, ctx.user, "h1_collab_accept", "report", None,
+                 "token=%s..." % token[:12], ctx.remote)
+    return result
+
+
+@route("POST", r"/api/h1/collabs/invite", scope="write")
+def r_h1_collab_invite(ctx, m):
+    """Invite a collaborator to a report."""
+    gql = _need_gql()
+    b = ctx.body or {}
+    report_id = (b.get("report_id") or "").strip()
+    username = (b.get("username") or "").strip()
+    if not report_id or not username:
+        raise HttpError(400, "report_id and username are required")
+    try:
+        result = gql.invite_collaborator(report_id, username)
+    except gql.GQLError as e:
+        raise HttpError(400, str(e))
+    common.audit(ctx.conn, ctx.user, "h1_collab_invite", "report", report_id,
+                 "invited %s" % username, ctx.remote)
+    return result
+
+
+@route("POST", r"/api/h1/collabs/split", scope="write")
+def r_h1_collab_split(ctx, m):
+    """Set the bounty split percentage for a collaborator."""
+    gql = _need_gql()
+    b = ctx.body or {}
+    report_id = (b.get("report_id") or "").strip()
+    username = (b.get("username") or "").strip()
+    percentage = b.get("percentage")
+    if not report_id or not username or percentage is None:
+        raise HttpError(400, "report_id, username, and percentage are required")
+    try:
+        pct = int(percentage)
+        if pct < 0 or pct > 100:
+            raise ValueError
+    except (TypeError, ValueError):
+        raise HttpError(400, "percentage must be an integer 0-100")
+    try:
+        result = gql.update_bounty_split(report_id, username, pct)
+    except gql.GQLError as e:
+        raise HttpError(400, str(e))
+    common.audit(ctx.conn, ctx.user, "h1_collab_split", "report", report_id,
+                 "%s -> %d%%" % (username, pct), ctx.remote)
+    return result
 
 
 # ------------------------------------------------------- incremental H1 poller
