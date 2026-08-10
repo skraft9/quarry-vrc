@@ -572,6 +572,149 @@ def create_report(username, token, payload):
     return h1_id, "https://hackerone.com/reports/%s" % h1_id, d
 
 
+# ------------------------------------------------------------------ report intents (draft + attachments)
+
+def _multipart_upload(path, username, token, files):
+    """POST multipart/form-data to `path` with file attachments.
+
+    `files` is a list of (field_name, filename, data_bytes, content_type) tuples.
+    Returns the parsed JSON response.
+    """
+    import uuid
+    boundary = uuid.uuid4().hex
+    body_parts = []
+    for field, fname, fdata, ctype in files:
+        body_parts.append(("--%s\r\n" % boundary).encode("ascii"))
+        body_parts.append(
+            ('Content-Disposition: form-data; name="%s"; filename="%s"\r\n' % (field, fname)
+             ).encode("ascii"))
+        body_parts.append(("Content-Type: %s\r\n\r\n" % ctype).encode("ascii"))
+        body_parts.append(fdata)
+        body_parts.append(b"\r\n")
+    body_parts.append(("--%s--\r\n" % boundary).encode("ascii"))
+    body = b"".join(body_parts)
+
+    url = API_ROOT + path
+    cred = base64.b64encode(("%s:%s" % (username, token)).encode("utf-8")).decode("ascii")
+    headers = {
+        "Authorization": "Basic " + cred,
+        "Content-Type": "multipart/form-data; boundary=%s" % boundary,
+        "Accept": "application/json",
+        "User-Agent": USER_AGENT,
+    }
+    req = urllib.request.Request(url, data=body, method="POST", headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT * 2) as r:
+            return json.loads(r.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        err_body = ""
+        try:
+            err_body = e.read().decode("utf-8", "replace")[:300]
+        except Exception:
+            pass
+        raise H1Error("attachment upload failed (HTTP %d): %s" % (e.code, err_body), code=e.code)
+    except urllib.error.URLError as e:
+        raise H1Error("could not reach HackerOne for attachment upload: %s" % e.reason)
+
+
+def create_report_intent(username, token, team_handle):
+    """Create a draft report (report_intent). Returns the intent id.
+
+    Report intents are HackerOne's draft mechanism. Files can be attached to an
+    intent before it is submitted as a real report. The intent id is ephemeral
+    and only meaningful until submission.
+
+    KNOWN RISK / UNVERIFIED (maintainer note, v1.4.0): the `/hackers/report_intents`
+    path and its `/attachments` and `/submit` subresources are not confirmed against a
+    live HackerOne hacker REST token, and the hacker API returns 401 (not 404) for a
+    route that does not exist, so a wrong path reads as an auth failure. Verify this flow
+    end to end against a real token before relying on `--attach`; if report intents live
+    only in the GraphQL/web API this path needs reworking. Tracked as a follow-up.
+    """
+    payload = {"data": {"type": "report-intent",
+                        "attributes": {"team_handle": team_handle}}}
+    d = _request("/hackers/report_intents", username, token, method="POST", payload=payload)
+    node = d.get("data") or {}
+    intent_id = node.get("id")
+    if not intent_id:
+        raise H1Error("HackerOne accepted the intent but returned no id")
+    return str(intent_id)
+
+
+def upload_attachments(username, token, intent_id, file_paths):
+    """Upload files to a report intent. Returns a list of attachment metadata dicts.
+
+    Each file is uploaded via multipart POST to /hackers/report_intents/{id}/attachments.
+    The `files[]` field name is what the API expects.
+    """
+    import mimetypes as mt
+    results = []
+    for fpath in file_paths:
+        if not os.path.isfile(fpath):
+            continue
+        fname = os.path.basename(fpath)
+        ctype = mt.guess_type(fname)[0] or "application/octet-stream"
+        with open(fpath, "rb") as fh:
+            data = fh.read()
+        path = "/hackers/report_intents/%s/attachments" % intent_id
+        resp = _multipart_upload(path, username, token, [("files[]", fname, data, ctype)])
+        # The response wraps attachments in a data array, but a single upload can come back
+        # as a bare object. Normalize to a list so we never iterate a dict's keys (which made
+        # the later att.get(...) raise AttributeError on a string).
+        data_field = resp.get("data") or []
+        if isinstance(data_field, dict):
+            data_field = [data_field]
+        for att in data_field:
+            if not isinstance(att, dict):
+                continue
+            a = att.get("attributes") or att
+            results.append({
+                "id": att.get("id") or "",
+                "file_name": a.get("file_name") or fname,
+                "file_size": a.get("file_size") or len(data),
+                "content_type": a.get("content_type") or ctype,
+            })
+    return results
+
+
+def submit_report_intent(username, token, intent_id, payload):
+    """Submit a report intent as a real report. IRREVERSIBLE.
+
+    The payload is the same shape as build_report_payload produces. Returns
+    (h1_id, url, raw) just like create_report.
+    """
+    d = _request("/hackers/report_intents/%s/submit" % intent_id, username, token,
+                 method="POST", payload=payload)
+    node = d.get("data") or {}
+    h1_id = node.get("id") or ""
+    if not h1_id:
+        raise H1Error("HackerOne accepted the submission but returned no report id")
+    return h1_id, "https://hackerone.com/reports/%s" % h1_id, d
+
+
+def create_report_with_attachments(username, token, payload, file_paths):
+    """Create a report with file attachments via the report_intents flow.
+
+    1. Create a draft intent
+    2. Upload each file as an attachment
+    3. Submit the intent as a real report
+
+    Returns (h1_id, url, raw_response, attachments_uploaded).
+    IRREVERSIBLE once step 3 completes.
+    """
+    handle = payload.get("data", {}).get("attributes", {}).get("team_handle")
+    if not handle:
+        raise H1Error("payload missing team_handle")
+
+    intent_id = create_report_intent(username, token, handle)
+    attachments = []
+    if file_paths:
+        attachments = upload_attachments(username, token, intent_id, file_paths)
+
+    h1_id, url, raw = submit_report_intent(username, token, intent_id, payload)
+    return h1_id, url, raw, attachments
+
+
 def add_comment(username, token, h1_id, body, internal=False):
     """NOT SUPPORTED. HackerOne's hacker API has no endpoint for commenting on a report.
 
@@ -1526,6 +1669,12 @@ def status(conn):
     }
 
 
+def _target_slug_from_path(filepath):
+    """Extract the target slug from a workspace path like /workspace/vulns_<slug>/..."""
+    m = re.search(r"/vulns_([A-Za-z0-9_-]+)/", os.path.abspath(filepath or ""))
+    return m.group(1).lower() if m else None
+
+
 def submit_cli(conn, args):
     """Drive --submit. Dry runs unless --confirm, because a created report cannot be withdrawn."""
     u, t, _stored_handle = get_credentials()
@@ -1582,6 +1731,18 @@ def submit_cli(conn, args):
     payload = build_report_payload(handle, title, vuln, impact, weakness_id, scope_id,
                                    severity_rating=args.severity)
 
+    # Collect evidence files if --attach was passed.
+    evidence_files = []
+    if getattr(args, "attach", False):
+        try:
+            import screenshot as screenshot_mod
+            target_slug = _target_slug_from_path(args.submit)
+            if target_slug:
+                evidence = screenshot_mod.collect_evidence(target_slug)
+                evidence_files = [f["path"] for f in evidence]
+        except Exception as exc:
+            print("  warning     could not collect evidence: %s" % exc)
+
     print("  file        %s" % args.submit)
     print("  program     %s" % handle)
     print("  title       %s" % title)
@@ -1590,13 +1751,23 @@ def submit_cli(conn, args):
     print("  severity    %s" % args.severity)
     print("  body        %d chars" % len(vuln))
     print("  impact      %d chars" % len(impact))
+    if evidence_files:
+        total_size = sum(os.path.getsize(f) for f in evidence_files)
+        print("  evidence    %d files (%d bytes)" % (len(evidence_files), total_size))
+        for f in evidence_files:
+            print("              %s" % os.path.basename(f))
 
     if not args.confirm:
         print("\nDRY RUN. Nothing was sent. Re-run with --confirm to submit.")
         return
 
-    h1_id, url, _raw = create_report(u, t, payload)
-    print("\nSUBMITTED  #%s  %s" % (h1_id, url))
+    if evidence_files:
+        h1_id, url, _raw, attachments = create_report_with_attachments(
+            u, t, payload, evidence_files)
+        print("\nSUBMITTED  #%s  %s  (%d attachments)" % (h1_id, url, len(attachments)))
+    else:
+        h1_id, url, _raw = create_report(u, t, payload)
+        print("\nSUBMITTED  #%s  %s" % (h1_id, url))
     common.audit(conn, "cli", "h1_report_created", source="h1-api",
                  detail=json.dumps({"h1_id": h1_id, "title": title, "file": args.submit}))
     closed = close_lead_on_submit(conn, args.submit, h1_id, url,
@@ -1774,6 +1945,8 @@ def main():
     ap.add_argument("--scope", help="with --submit: structured scope id or exact asset identifier")
     ap.add_argument("--severity", default="medium", choices=list(SEVERITY_RATINGS),
                     help="with --submit: our own triage assessment. Required by the program")
+    ap.add_argument("--attach", action="store_true",
+                    help="with --submit: auto-attach evidence files from the workspace")
     ap.add_argument("--confirm", action="store_true",
                     help="with --submit: actually send it. Creating a report cannot be undone")
     ap.add_argument("--list-weaknesses", action="store_true")
