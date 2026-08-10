@@ -20,6 +20,20 @@
 
 <img src="docs/img/rule.svg" alt="" width="100%">
 
+---
+
+<img width="3786" height="1726" alt="Screenshot 2026-08-06 233434" src="https://github.com/user-attachments/assets/5f698813-1e33-45b2-beb7-7388010b3877" />
+
+---
+
+<img width="3796" height="1728" alt="Screenshot 2026-08-06 235412" src="https://github.com/user-attachments/assets/1d99fed7-d2c7-496c-baf8-a2cfd0836bfe" />
+
+---
+
+<img width="3800" height="1743" alt="Screenshot 2026-08-06 233713" src="https://github.com/user-attachments/assets/29918b8c-fcb4-469e-a56f-31bd9a0d062d" />
+
+---
+
 ## <img src="docs/img/gem-sm.svg" width="18" align="top" alt=""> Supported Bug Bounty Platforms
 
 - **HackerOne**
@@ -32,7 +46,7 @@ Quarry syncs and submits through the HackerOne API. Other platforms are not supp
 
 - **Your entire hunt on one board.** Sync every report, program, bounty and triage thread from the
   HackerOne API, so the console mirrors your real hunting instead of a spreadsheet you patch by hand.
-- **Find it, draft it, submit it.** File a finished report to a program with one click, then watch
+- **Find it, draft it, submit it.** File a finished report using the HackerOne API, then watch
   its state and bounty flow straight back into the Tracker.
 - **A researcher's arsenal, built in.** Full-text search across every lead, report and payload, a
   payload library cloned from PayloadsAllTheThings, and live CVE/CVSS advisory feeds cross-referenced
@@ -248,7 +262,8 @@ House rules:
   same for everyone: `feat:` (a feature or behaviour change), `fix:` (a bug fix), `docs:` (docs only),
   `chore:` (tooling or cleanup). Keep the subject imperative and lower-case - `feat: add the labs tab`.
 - **One PR per kind of change** - a feature and a docs change are two PRs, even in one sitting.
-- **Bump `VERSION`** in the same PR: minor for a behaviour change, patch for a fix, docs or chore.
+- **Bump `VERSION`** in the same PR: a feature moves the minor (`1.x.0`), a fix, docs or chore pass
+  moves the patch (`1.0.x`).
 - **Link the code you touch** in the PR body as a backticked, SHA-pinned hyperlink, and cite other
   PRs by their number (GitHub renders it as the PR's own title).
 - **Run `scripts/check-no-private-data.sh` before every PR**; it gates against committing secrets or
