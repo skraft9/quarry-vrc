@@ -90,13 +90,15 @@ not a one-line summary. Structure:
 2. Sections in THIS order, and **print only the sections that have content** (omit an empty one
    entirely): **Features**, **Fixes**, **Security**, **Performance**, **Docs**, **Upgrade notes**, and
    **Contributors** last.
-3. A bullet tied to a PR LEADS with the number, `* #N - <what it did>`, and describes the user-facing
-   impact, not the diff. GitHub renders `#N` as the PR's own title in a hyperlink, so do NOT restate
-   that title: no bold subject repeating it, no re-typing it. A bullet with no PR may bold its subject.
+3. A bullet tied to a PR LEADS with `PR #N`, `* PR #N - <what it did>`, and describes the user-facing
+   impact, not the diff. Use the `PR ` prefix: a GitHub RELEASE body does not preview a bare `#N` the
+   way a PR or issue body does, so `PR #N` is a clear, self-describing reference that still auto-links.
+   Do NOT restate the PR's own title: no bold subject repeating it, no re-typing it. A bullet with no
+   PR may bold its subject.
 4. **Upgrade notes** always says how to update and anything a user must do or know before upgrading.
 5. **Contributors** closes the notes whenever an outside contributor shipped in the release: tag each
-   by handle and list their PRs, for example `* @handle - #6, #7`. It is a courtesy, included on every
-   release that carries external work.
+   by handle and list their PRs, for example `* @handle - PR #6, PR #7`. It is a courtesy, included on
+   every release that carries external work.
 
 This is a living standard; extend it deliberately over time rather than letting notes drift back to
 one-liners.
