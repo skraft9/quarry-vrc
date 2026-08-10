@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Refuse to let operator-private data reach the public repo. Run before every push and release,
+# Refuse to let private data reach the repository. Run before every push and release,
 # and in CI on every PR. Exits non-zero (and prints the offending lines) if anything matches.
 #
 # This repo is PUBLIC. It must never carry any operator's home paths, LAN IPs, real HackerOne
@@ -12,9 +12,8 @@
 #      line, holding your live program handles, vendor names and identifiers. The public script
 #      cannot enumerate those without leaking them, so they live only on your machine / CI secret.
 #
-# The scaffold of this repo was forked from a private codebase and shipped several real references
-# (an engineer's handle, program handles used as examples, workspace paths). This check exists so
-# that can never recur silently.
+# This check exists so that no credential, handle, path, report id or other personal data ever
+# reaches a public commit, silently or otherwise.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
@@ -57,6 +56,6 @@ if [ -f .private-denylist ]; then
 fi
 
 if [ "$FAIL" -ne 0 ]; then
-  echo; echo "FAIL: private data found. Scrub it before this reaches the public repo."; exit 1
+  echo; echo "FAIL: private data found. Scrub it before this reaches the repository."; exit 1
 fi
 echo "OK: no operator-private data found in tracked files."

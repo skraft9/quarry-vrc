@@ -22,9 +22,7 @@ DEFAULT_APP_NAME = "Quarry VRC"
 
 # Name-independent on purpose. Do NOT rebrand these; nothing user-facing reads them.
 # Env-overridable so two instances on the SAME host (cookies are scoped by domain, not port) do
-# not clobber each other's session. Distinct default from the private build's "app_session" so a
-# public instance running beside a private one never collides; set QUARRY_COOKIE_NAME to run two
-# public instances side by side.
+# not clobber each other's session; set QUARRY_COOKIE_NAME to run more than one instance side by side.
 COOKIE_NAME = os.environ.get("QUARRY_COOKIE_NAME") or "quarry_session"
 CSRF_HEADER = "X-App-CSRF"
 TOKEN_PREFIX = "tok_"

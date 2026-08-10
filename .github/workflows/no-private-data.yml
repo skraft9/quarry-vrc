@@ -1,6 +1,6 @@
 name: no-private-data
 
-# Refuse any change that carries operator-private data into this public repo. Runs the structural
+# Refuse any change that carries private data into this repository. Runs the structural
 # layer of scripts/check-no-private-data.sh on every push and PR. The literal .private-denylist
 # layer is git-ignored, so it does not run here - that is the maintainer's local pre-push job, or
 # wire it in as a repository secret if you want it enforced in CI too.
