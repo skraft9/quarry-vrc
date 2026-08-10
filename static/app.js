@@ -6982,8 +6982,225 @@
     return card;
   }
 
+  /* =========================================================== invitations card
+     Program invitations and report collaboration management via the H1 GraphQL API.
+     Needs a session cookie (separate from the API token) because the hacker REST API
+     has no invitation endpoints. */
+
+  function invitationsCard() {
+    var card = el('section', { class: 'card integration' });
+    var titleRow = el('div', { class: 'card-title' }, [
+      el('span', { text: 'Invitations and Collaborations' })
+    ]);
+    var badgeHost = el('span', { class: 'int-badge' });
+    titleRow.appendChild(badgeHost);
+    card.appendChild(titleRow);
+
+    var body = el('div', { class: 'pane-body' });
+    card.appendChild(body);
+    var statusHost = el('div', { class: 'int-status' });
+    var listHost = el('div', {});
+    var formHost = el('div', {});
+    append(body, [statusHost, listHost, formHost]);
+
+    function loadStatus() {
+      clear(statusHost);
+      append(statusHost, loading('Checking session...'));
+      api('/integrations/hackerone/session')
+        .then(function (d) {
+          clear(statusHost);
+          clear(badgeHost);
+          d = d || {};
+          badgeHost.appendChild(d.configured
+            ? el('span', { class: 'pill st-resolved', text: 'session active' })
+            : el('span', { class: 'pill st-new', text: 'no session' }));
+          statusHost.appendChild(metaGrid([
+            integrationRow('Session', d.configured ? 'stored' : 'not set'),
+            integrationRow('Masked', d.masked_session || '-')
+          ]) || el('div', {}));
+          drawSessionForm(d);
+          if (d.configured) loadInvitations();
+        })
+        .catch(function (err) {
+          clear(statusHost);
+          if (err && err.status === 503) {
+            append(statusHost, el('div', { class: 'empty dim', text: 'h1_graphql module unavailable.' }));
+          } else {
+            append(statusHost, errorPanel(err, loadStatus));
+          }
+        });
+    }
+
+    function drawSessionForm(d) {
+      clear(formHost);
+      var tokenInput = el('input', {
+        type: 'password', autocomplete: 'off', spellcheck: 'false',
+        placeholder: 'paste __Host-session cookie value'
+      });
+      var saveBtn = el('button', { class: 'btn btn-primary', type: 'button', text: 'Save and verify' });
+      var errHost = el('div', {});
+
+      saveBtn.addEventListener('click', function () {
+        var token = tokenInput.value.trim();
+        clear(errHost);
+        if (!token) {
+          append(errHost, el('div', { class: 'alert alert-warn', text: 'Session token is required.' }));
+          return;
+        }
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Verifying...';
+        api('/integrations/hackerone/session', {
+          method: 'PUT', body: { session_token: token }
+        }).then(function (res) {
+          tokenInput.value = '';
+          saveBtn.disabled = false;
+          saveBtn.textContent = 'Save and verify';
+          var v = res && res.verified;
+          toast('Session verified' + (v && v.username ? ' as ' + v.username : '') + '.', 'ok');
+          loadStatus();
+        }).catch(function (err) {
+          saveBtn.disabled = false;
+          saveBtn.textContent = 'Save and verify';
+          append(errHost, errorPanel(err));
+        });
+      });
+
+      append(formHost, [
+        el('h3', { class: 'int-formtitle', text: d.configured ? 'Replace session' : 'Store session cookie' }),
+        el('div', { class: 'alert alert-info tiny' }, [
+          el('strong', { class: 'alert-title', text: 'Why a session cookie?' }),
+          el('div', { text:
+            'The REST API has no endpoints for invitations or collaborations. Those operations ' +
+            'use the GraphQL API at hackerone.com/graphql, which needs the __Host-session cookie ' +
+            'from a logged-in browser. Open DevTools > Application > Cookies on hackerone.com, ' +
+            'copy the __Host-session value, and paste it here. It typically lasts several weeks.' })
+        ]),
+        errHost,
+        el('div', { class: 'form-grid' }, [
+          field('Session token', tokenInput, 'write-only; the __Host-session cookie value')
+        ]),
+        el('div', { class: 'form-actions' }, saveBtn)
+      ]);
+    }
+
+    function loadInvitations() {
+      clear(listHost);
+      append(listHost, loading('Loading invitations...'));
+
+      Promise.all([
+        api('/h1/invitations').catch(function () { return { items: [] }; }),
+        api('/h1/collabs').catch(function () { return { items: [] }; })
+      ]).then(function (results) {
+        clear(listHost);
+        var programs = results[0].items || [];
+        var collabs = results[1].items || [];
+
+        if (programs.length) {
+          append(listHost, el('h3', { class: 'int-formtitle', text: 'Program invitations (' + programs.length + ')' }));
+          programs.forEach(function (inv) {
+            var row = el('div', { class: 'inv-row' });
+            var info = el('div', { class: 'inv-info' }, [
+              el('strong', { text: inv.program_name || inv.program_handle }),
+              el('span', { class: 'tiny dim', text: ' ' + (inv.offers_bounties ? 'bounty' : 'VDP') +
+                (inv.expires_at ? ' - expires ' + inv.expires_at.substring(0, 10) : '') })
+            ]);
+            var acceptBtn = el('button', { class: 'btn btn-sm btn-primary', type: 'button', text: 'Accept' });
+            var rejectBtn = el('button', { class: 'btn btn-sm btn-quiet', type: 'button', text: 'Reject' });
+
+            acceptBtn.addEventListener('click', function () {
+              acceptBtn.disabled = true;
+              api('/h1/invitations/accept', { method: 'POST', body: { token: inv.token } })
+                .then(function () { toast('Accepted ' + (inv.program_name || inv.program_handle), 'ok'); loadInvitations(); })
+                .catch(function (err) { toastError(err); acceptBtn.disabled = false; });
+            });
+            rejectBtn.addEventListener('click', function () {
+              rejectBtn.disabled = true;
+              api('/h1/invitations/reject', { method: 'POST', body: { token: inv.token } })
+                .then(function () { toast('Rejected ' + (inv.program_name || inv.program_handle), 'ok'); loadInvitations(); })
+                .catch(function (err) { toastError(err); rejectBtn.disabled = false; });
+            });
+            append(row, [info, el('div', { class: 'inv-actions' }, [acceptBtn, rejectBtn])]);
+            append(listHost, row);
+          });
+        }
+
+        if (collabs.length) {
+          append(listHost, el('h3', { class: 'int-formtitle', text: 'Collaboration invitations (' + collabs.length + ')' }));
+          collabs.forEach(function (inv) {
+            var row = el('div', { class: 'inv-row' });
+            var info = el('div', { class: 'inv-info' }, [
+              el('strong', { text: '#' + inv.report_id }),
+              el('span', { text: ' ' + (inv.report_title || '').substring(0, 50) }),
+              el('span', { class: 'tiny dim', text: ' from ' + inv.invited_by +
+                (inv.split_percentage ? ' (' + inv.split_percentage + '% split)' : '') })
+            ]);
+            var acceptBtn = el('button', { class: 'btn btn-sm btn-primary', type: 'button', text: 'Accept' });
+            acceptBtn.addEventListener('click', function () {
+              acceptBtn.disabled = true;
+              api('/h1/collabs/accept', { method: 'POST', body: { token: inv.token } })
+                .then(function () { toast('Accepted collab on #' + inv.report_id, 'ok'); loadInvitations(); })
+                .catch(function (err) { toastError(err); acceptBtn.disabled = false; });
+            });
+            append(row, [info, el('div', { class: 'inv-actions' }, [acceptBtn])]);
+            append(listHost, row);
+          });
+        }
+
+        if (!programs.length && !collabs.length) {
+          append(listHost, el('div', { class: 'empty dim', text: 'No pending invitations.' }));
+        }
+
+        /* Collaborator invite form */
+        append(listHost, el('h3', { class: 'int-formtitle', text: 'Invite collaborator' }));
+        var reportInput = el('input', { type: 'text', placeholder: 'H1 report id (e.g. 3722980)', spellcheck: 'false' });
+        var userInput = el('input', { type: 'text', placeholder: 'H1 username', spellcheck: 'false' });
+        var pctInput = el('input', { type: 'number', placeholder: '50', min: '0', max: '100', value: '50' });
+        var inviteBtn = el('button', { class: 'btn btn-sm', type: 'button', text: 'Invite' });
+        var splitBtn = el('button', { class: 'btn btn-sm', type: 'button', text: 'Set split' });
+        var collabErr = el('div', {});
+
+        inviteBtn.addEventListener('click', function () {
+          var rid = reportInput.value.trim();
+          var user = userInput.value.trim();
+          clear(collabErr);
+          if (!rid || !user) { append(collabErr, el('div', { class: 'alert alert-warn', text: 'Report id and username required.' })); return; }
+          inviteBtn.disabled = true;
+          api('/h1/collabs/invite', { method: 'POST', body: { report_id: rid, username: user } })
+            .then(function () { toast('Invited ' + user + ' to #' + rid, 'ok'); inviteBtn.disabled = false; })
+            .catch(function (err) { toastError(err); inviteBtn.disabled = false; append(collabErr, errorPanel(err)); });
+        });
+
+        splitBtn.addEventListener('click', function () {
+          var rid = reportInput.value.trim();
+          var user = userInput.value.trim();
+          var pct = pctInput.value.trim();
+          clear(collabErr);
+          if (!rid || !user || !pct) { append(collabErr, el('div', { class: 'alert alert-warn', text: 'All fields required.' })); return; }
+          splitBtn.disabled = true;
+          api('/h1/collabs/split', { method: 'POST', body: { report_id: rid, username: user, percentage: parseInt(pct) } })
+            .then(function () { toast('Split set: ' + user + ' gets ' + pct + '% on #' + rid, 'ok'); splitBtn.disabled = false; })
+            .catch(function (err) { toastError(err); splitBtn.disabled = false; append(collabErr, errorPanel(err)); });
+        });
+
+        append(listHost, [
+          el('div', { class: 'form-grid' }, [
+            field('Report ID', reportInput, 'the H1 report number'),
+            field('Username', userInput, 'the collaborator handle'),
+            field('Split %', pctInput, 'their share of the bounty')
+          ]),
+          collabErr,
+          el('div', { class: 'form-actions' }, [inviteBtn, splitBtn])
+        ]);
+      });
+    }
+
+    loadStatus();
+    return card;
+  }
+
   var INTEGRATIONS = [
-    { id: 'hackerone', label: 'HackerOne', card: hackeroneCard }
+    { id: 'hackerone', label: 'HackerOne', card: hackeroneCard },
+    { id: 'invitations', label: 'Invitations', card: invitationsCard }
   ];
 
   function integrationsView(root) {
