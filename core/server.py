@@ -1434,6 +1434,81 @@ def r_screenshot(ctx, m):
     return result
 
 
+@route("GET", r"/api/evidence/(\w[\w-]*)")
+def r_evidence_list(ctx, m):
+    """List all evidence files for a target workspace."""
+    if not screenshot_mod:
+        raise HttpError(503, "screenshot module unavailable")
+    target = m.group(1)
+    files = screenshot_mod.collect_evidence(target)
+    return {"target": target, "files": files, "count": len(files),
+            "total_bytes": sum(f["size"] for f in files)}
+
+
+@route("GET", r"/api/evidence/(\w[\w-]*)/timeline")
+def r_evidence_timeline(ctx, m):
+    """Build an evidence timeline for a target workspace."""
+    if not screenshot_mod:
+        raise HttpError(503, "screenshot module unavailable")
+    target = m.group(1)
+    ref = ctx.q("ref")
+    result = screenshot_mod.build_timeline(target, lead_ref=ref)
+    return result
+
+
+@route("POST", r"/api/evidence/(\w[\w-]*)/timeline", scope="write")
+def r_evidence_timeline_export(ctx, m):
+    """Export the evidence timeline as a markdown file."""
+    if not screenshot_mod:
+        raise HttpError(503, "screenshot module unavailable")
+    target = m.group(1)
+    ref = (ctx.body or {}).get("ref") or ctx.q("ref")
+    try:
+        path = screenshot_mod.export_timeline(target, lead_ref=ref)
+    except RuntimeError as e:
+        raise HttpError(400, str(e))
+    common.audit(ctx.conn, ctx.user, "timeline_export", "evidence", None, path, ctx.remote)
+    return {"ok": True, "path": path, "filename": os.path.basename(path)}
+
+
+@route("POST", r"/api/evidence/(\w[\w-]*)/feed", scope="write")
+def r_evidence_feed(ctx, m):
+    """Pull matching proxy traffic for a target and save as evidence.
+
+    Body fields:
+      backend      'auto' | 'caido' | 'burp'
+      hosts        list of hostnames to filter (overrides scope lookup)
+      limit        max items to pull (default: 20)
+      caido_url    override Caido API URL
+      burp_url     override Burp API URL
+      caido_token  Caido auth token
+    """
+    if not screenshot_mod:
+        raise HttpError(503, "screenshot module unavailable")
+    target = m.group(1)
+    b = ctx.body or {}
+    hosts = b.get("hosts")
+    if isinstance(hosts, str):
+        hosts = [h.strip() for h in hosts.split(",") if h.strip()]
+    try:
+        result = screenshot_mod.proxy_feed(
+            target_slug=target,
+            backend=b.get("backend", "auto"),
+            hosts=hosts,
+            limit=min(int(b.get("limit", 20)), 100),
+            caido_url=b.get("caido_url"),
+            burp_url=b.get("burp_url"),
+            caido_token=b.get("caido_token"),
+            conn=ctx.conn,
+        )
+    except RuntimeError as e:
+        raise HttpError(400, str(e))
+    common.audit(ctx.conn, ctx.user, "proxy_feed", "evidence", None,
+                 "%s: %d captured via %s" % (target, result["count"], result["backend"]),
+                 ctx.remote)
+    return result
+
+
 # ---------------------------------------------------------------- tracker
 TRACKER_PATH = os.environ.get("QUARRY_TRACKER_MD") or ""
 

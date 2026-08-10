@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Screenshot capture for bug bounty submissions. Stdlib only.
+"""Screenshot and evidence capture for bug bounty submissions. Stdlib only.
 
 Three capture backends, tried in order of preference:
 
@@ -7,15 +7,27 @@ Three capture backends, tried in order of preference:
   2. Burp    -- export selected items via the REST API (localhost:1337)
   3. OS      -- platform screencapture (macOS `screencapture`, Linux `scrot` / `import`)
 
-Each backend produces a PNG (or JPEG for OS fallback) saved into the workspace's
-evidence directory. The file is recorded in the uploads table so the Files tab and
-the submission workflow can reference it.
+Each backend produces a file saved into the workspace's evidence directory. The file
+is recorded in the uploads table so the Files tab and the submission workflow can
+reference it.
+
+Additional features beyond single capture:
+
+  * Evidence timeline  -- collect all evidence for a lead into a chronological markdown
+                          narrative ready to paste into Steps To Reproduce.
+  * Proxy feed         -- pull recent Caido/Burp proxy history filtered by in-scope hosts
+                          and auto-file matching requests as evidence.
+  * Attachment collect  -- gather all evidence files for a workspace, ready for upload
+                          alongside a HackerOne report submission.
 
 CLI:
     python3 screenshot.py --detect                       # show available backends
     python3 screenshot.py --capture --target <slug>      # OS screenshot, filed to workspace
     python3 screenshot.py --caido --request-id 42        # pull Caido request #42
     python3 screenshot.py --burp --port 1337             # pull from Burp proxy history
+    python3 screenshot.py --timeline --target <slug>     # build evidence timeline
+    python3 screenshot.py --feed --target <slug>         # pull matching proxy traffic
+    python3 screenshot.py --collect --target <slug>      # list evidence for attachment
 """
 import argparse
 import hashlib
@@ -485,63 +497,428 @@ def capture(backend="auto", target_slug=None, workspace=None, name=None,
     return result
 
 
+# ---------------------------------------------------------------- evidence timeline
+
+def _evidence_dir_for_target(target_slug, workspace=None):
+    """Resolve the evidence directory for a target. Returns the absolute path."""
+    base = workspace or common.HUNT_ROOT
+    if target_slug:
+        return os.path.join(base, "vulns_%s" % target_slug, EVIDENCE_DIR)
+    return os.path.join(base, EVIDENCE_DIR)
+
+
+def _list_evidence(target_slug, workspace=None):
+    """List all evidence files for a target, sorted by mtime ascending (oldest first)."""
+    edir = _evidence_dir_for_target(target_slug, workspace)
+    if not os.path.isdir(edir):
+        return []
+    files = []
+    for name in os.listdir(edir):
+        full = os.path.join(edir, name)
+        if not os.path.isfile(full):
+            continue
+        st = os.stat(full)
+        files.append({
+            "path": full,
+            "name": name,
+            "size": st.st_size,
+            "mtime": st.st_mtime,
+            "mtime_iso": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(st.st_mtime)),
+            "ext": os.path.splitext(name)[1].lower(),
+            "mime": mimetypes.guess_type(name)[0] or "application/octet-stream",
+        })
+    files.sort(key=lambda f: f["mtime"])
+    return files
+
+
+def build_timeline(target_slug, workspace=None, lead_ref=None):
+    """Build a chronological evidence timeline as markdown.
+
+    Scans the workspace evidence directory, sorts by timestamp, and produces a
+    markdown document with each piece of evidence as a numbered step. Text evidence
+    (Caido/Burp captures) is inlined; binary files (screenshots) are referenced.
+
+    Returns {"markdown": str, "files": list, "count": int}.
+    """
+    files = _list_evidence(target_slug, workspace)
+    if not files:
+        return {"markdown": "", "files": [], "count": 0}
+
+    lines = []
+    heading = "Evidence Timeline"
+    if lead_ref:
+        heading = "%s - Evidence Timeline" % lead_ref
+    lines.append("## %s" % heading)
+    lines.append("")
+    lines.append("Collected %d pieces of evidence." % len(files))
+    lines.append("")
+
+    for i, f in enumerate(files, 1):
+        lines.append("### Step %d - %s" % (i, f["name"]))
+        lines.append("")
+        lines.append("**Captured:** %s | **Size:** %d bytes" % (f["mtime_iso"], f["size"]))
+        lines.append("")
+
+        if f["ext"] in (".txt", ".md", ".json", ".xml", ".html"):
+            try:
+                with open(f["path"], "r", encoding="utf-8", errors="replace") as fh:
+                    content = fh.read()
+                if len(content) > 8000:
+                    content = content[:8000] + "\n\n... (truncated, %d bytes total)" % f["size"]
+                lines.append("```")
+                lines.append(content)
+                lines.append("```")
+            except OSError:
+                lines.append("*File could not be read.*")
+        elif f["ext"] in (".png", ".jpg", ".jpeg", ".gif", ".webp"):
+            lines.append("![%s](%s)" % (f["name"], f["path"]))
+        else:
+            lines.append("*Binary file: `%s` (%s, %d bytes)*" % (
+                f["name"], f["mime"], f["size"]))
+
+        lines.append("")
+
+    return {"markdown": "\n".join(lines), "files": files, "count": len(files)}
+
+
+def export_timeline(target_slug, workspace=None, lead_ref=None):
+    """Build the timeline and save it as a markdown file in the evidence directory.
+
+    Returns the path to the saved timeline file.
+    """
+    result = build_timeline(target_slug, workspace, lead_ref)
+    if not result["count"]:
+        raise RuntimeError("no evidence files found for target %s" % (target_slug or "(none)"))
+
+    edir = _evidence_dir_for_target(target_slug, workspace)
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    dest = os.path.join(edir, "%s_timeline.md" % stamp)
+    path, _, _ = _save_binary(dest, result["markdown"].encode("utf-8"))
+    return path
+
+
+# ---------------------------------------------------------------- proxy feed
+
+def _scope_hosts(conn, target_slug):
+    """Get in-scope hostnames for a target from the database.
+
+    Pulls from the scopes table joined through the target's program. Returns a list
+    of hostnames/identifiers that can be matched against proxy traffic.
+    """
+    if not conn or not target_slug:
+        return []
+    try:
+        rows = conn.execute(
+            "SELECT s.identifier FROM scopes s"
+            " JOIN programs p ON p.id = s.program_id"
+            " JOIN targets t ON t.program_id = p.id"
+            " WHERE t.slug = ?", (target_slug,)).fetchall()
+        hosts = []
+        for r in rows:
+            ident = (r[0] or "").strip()
+            if not ident:
+                continue
+            ident = ident.replace("https://", "").replace("http://", "")
+            ident = ident.split("/")[0].strip()
+            if ident.startswith("*."):
+                ident = ident[2:]
+            if ident:
+                hosts.append(ident.lower())
+        return hosts
+    except Exception:
+        return []
+
+
+def proxy_feed_caido(target_slug, hosts=None, workspace=None, limit=20,
+                     base_url=None, auth_token=None, conn=None):
+    """Pull recent Caido proxy history filtered by in-scope hosts.
+
+    Fetches the last `limit` requests, filters by host match, and saves each matching
+    request/response as evidence. Returns a list of saved file paths.
+    """
+    url = (base_url or os.environ.get("CAIDO_URL") or CAIDO_DEFAULT_URL).rstrip("/")
+    hdrs = {}
+    if auth_token:
+        hdrs["Authorization"] = "Bearer " + auth_token
+
+    if not hosts and conn:
+        hosts = _scope_hosts(conn, target_slug)
+    if not hosts:
+        raise RuntimeError("no scope hosts found for target %s; pass --hosts or configure scopes"
+                           % (target_slug or "(none)"))
+
+    query = """
+    query GetRecent($first: Int!) {
+      requests(first: $first, order: { by: ID, ordering: DESC }) {
+        edges {
+          node {
+            id
+            host
+            port
+            method
+            path
+            query
+            raw
+            createdAt
+            response {
+              statusCode
+              raw
+            }
+          }
+        }
+      }
+    }
+    """
+    payload = {"query": query, "variables": {"first": min(limit * 3, 200)}}
+    result, status = _http_post_json(url + "/graphql", payload, headers=hdrs)
+    if status != 200:
+        raise RuntimeError("Caido API error (HTTP %d)" % status)
+
+    edges = ((result or {}).get("data") or {}).get("requests", {}).get("edges") or []
+    saved = []
+    for edge in edges:
+        node = edge.get("node") or {}
+        host = (node.get("host") or "").lower()
+        if not any(host == h or host.endswith("." + h) for h in hosts):
+            continue
+        try:
+            path = capture_caido(
+                request_id=node["id"], target_slug=target_slug, workspace=workspace,
+                base_url=base_url, auth_token=auth_token)
+            if conn:
+                with open(path, "rb") as fh:
+                    data = fh.read()
+                digest = hashlib.sha256(data).hexdigest()
+                _record_upload(conn, path, digest, len(data))
+            saved.append(path)
+        except RuntimeError:
+            continue
+        if len(saved) >= limit:
+            break
+
+    return saved
+
+
+def proxy_feed_burp(target_slug, hosts=None, workspace=None, limit=20,
+                    base_url=None, conn=None):
+    """Pull recent Burp proxy history filtered by in-scope hosts.
+
+    Fetches proxy history, filters by host match, and saves each matching item
+    as evidence. Returns a list of saved file paths.
+    """
+    url = (base_url or os.environ.get("BURP_URL") or BURP_DEFAULT_URL).rstrip("/")
+
+    if not hosts and conn:
+        hosts = _scope_hosts(conn, target_slug)
+    if not hosts:
+        raise RuntimeError("no scope hosts found for target %s; pass --hosts or configure scopes"
+                           % (target_slug or "(none)"))
+
+    body, status = _http_get(url + "/v0.1/proxy/history", timeout=10)
+    if status != 200 or not body:
+        raise RuntimeError("Burp API unreachable or returned HTTP %d" % status)
+
+    try:
+        items = json.loads(body.decode("utf-8"))
+    except (ValueError, UnicodeDecodeError):
+        raise RuntimeError("Burp API returned non-JSON response")
+
+    saved = []
+    for i, item in enumerate(reversed(items)):
+        host = (item.get("host") or item.get("ip") or "").lower()
+        if not any(host == h or host.endswith("." + h) for h in hosts):
+            continue
+        try:
+            path = capture_burp(
+                item_index=len(items) - 1 - i, target_slug=target_slug,
+                workspace=workspace, base_url=base_url)
+            if conn:
+                with open(path, "rb") as fh:
+                    data = fh.read()
+                digest = hashlib.sha256(data).hexdigest()
+                _record_upload(conn, path, digest, len(data))
+            saved.append(path)
+        except RuntimeError:
+            continue
+        if len(saved) >= limit:
+            break
+
+    return saved
+
+
+def proxy_feed(target_slug, backend="auto", hosts=None, workspace=None, limit=20,
+               caido_url=None, burp_url=None, caido_token=None, conn=None):
+    """Pull matching proxy traffic from Caido or Burp and save as evidence.
+
+    Returns {"backend": str, "saved": list, "count": int, "hosts": list}.
+    """
+    scope_hosts = hosts
+    if not scope_hosts and conn:
+        scope_hosts = _scope_hosts(conn, target_slug)
+
+    if backend == "auto":
+        backends = detect_backends()
+        if backends.get("caido", {}).get("available"):
+            backend = "caido"
+        elif backends.get("burp", {}).get("available"):
+            backend = "burp"
+        else:
+            raise RuntimeError("no proxy backend available (need Caido or Burp running)")
+
+    if backend == "caido":
+        saved = proxy_feed_caido(
+            target_slug, hosts=scope_hosts, workspace=workspace, limit=limit,
+            base_url=caido_url, auth_token=caido_token, conn=conn)
+    elif backend == "burp":
+        saved = proxy_feed_burp(
+            target_slug, hosts=scope_hosts, workspace=workspace, limit=limit,
+            base_url=burp_url, conn=conn)
+    else:
+        raise RuntimeError("unknown proxy backend: %s" % backend)
+
+    return {
+        "backend": backend,
+        "saved": saved,
+        "count": len(saved),
+        "hosts": scope_hosts or [],
+    }
+
+
+# ---------------------------------------------------------------- evidence collection for attachments
+
+def collect_evidence(target_slug, workspace=None):
+    """Gather all evidence files for a target, ready for attachment to a report.
+
+    Returns a list of dicts with path, name, size, mime, and sha256 for each file.
+    This is the input to the attachment upload flow in h1.py.
+    """
+    files = _list_evidence(target_slug, workspace)
+    out = []
+    for f in files:
+        try:
+            with open(f["path"], "rb") as fh:
+                data = fh.read()
+            f["sha256"] = hashlib.sha256(data).hexdigest()
+        except OSError:
+            f["sha256"] = ""
+        out.append(f)
+    return out
+
+
 # ---------------------------------------------------------------- CLI
 
 def main():
-    ap = argparse.ArgumentParser(description="Screenshot capture for submissions")
-    ap.add_argument("--detect", action="store_true",
-                    help="show available backends and exit")
-    ap.add_argument("--capture", action="store_true",
-                    help="take an OS screenshot")
-    ap.add_argument("--caido", action="store_true",
-                    help="pull from Caido proxy")
-    ap.add_argument("--burp", action="store_true",
-                    help="pull from Burp Suite proxy")
-    ap.add_argument("--target", metavar="SLUG",
-                    help="workspace target slug (files to vulns_<slug>/evidence/)")
-    ap.add_argument("--name", metavar="LABEL",
-                    help="label for the screenshot filename")
-    ap.add_argument("--request-id", metavar="ID",
-                    help="Caido request id to capture")
-    ap.add_argument("--item-index", metavar="N", type=int,
-                    help="Burp proxy history item index")
-    ap.add_argument("--mode", choices=("interactive", "fullscreen", "window"),
-                    default="interactive",
-                    help="OS capture mode (default: interactive)")
-    ap.add_argument("--caido-url", metavar="URL",
-                    help="Caido API URL (default: %s)" % CAIDO_DEFAULT_URL)
-    ap.add_argument("--burp-url", metavar="URL",
-                    help="Burp REST API URL (default: %s)" % BURP_DEFAULT_URL)
-    ap.add_argument("--caido-token", metavar="TOKEN",
-                    help="Caido authentication token")
-    ap.add_argument("--record", action="store_true",
-                    help="record in the uploads table (requires the database)")
+    ap = argparse.ArgumentParser(description="Screenshot and evidence capture for submissions")
+
+    g = ap.add_argument_group("capture")
+    g.add_argument("--detect", action="store_true",
+                   help="show available backends and exit")
+    g.add_argument("--capture", action="store_true",
+                   help="take an OS screenshot")
+    g.add_argument("--caido", action="store_true",
+                   help="pull from Caido proxy")
+    g.add_argument("--burp", action="store_true",
+                   help="pull from Burp Suite proxy")
+
+    g = ap.add_argument_group("evidence management")
+    g.add_argument("--timeline", action="store_true",
+                   help="build evidence timeline markdown for a target")
+    g.add_argument("--feed", action="store_true",
+                   help="pull matching proxy traffic for a target (Caido/Burp)")
+    g.add_argument("--collect", action="store_true",
+                   help="list all evidence files for a target")
+
+    g = ap.add_argument_group("options")
+    g.add_argument("--target", metavar="SLUG",
+                   help="workspace target slug (files to vulns_<slug>/evidence/)")
+    g.add_argument("--name", metavar="LABEL",
+                   help="label for the screenshot filename")
+    g.add_argument("--ref", metavar="REF",
+                   help="lead reference (e.g. F01) for timeline heading")
+    g.add_argument("--request-id", metavar="ID",
+                   help="Caido request id to capture")
+    g.add_argument("--item-index", metavar="N", type=int,
+                   help="Burp proxy history item index")
+    g.add_argument("--mode", choices=("interactive", "fullscreen", "window"),
+                   default="interactive",
+                   help="OS capture mode (default: interactive)")
+    g.add_argument("--hosts", metavar="HOST,HOST",
+                   help="comma-separated hosts to filter proxy feed")
+    g.add_argument("--limit", metavar="N", type=int, default=20,
+                   help="max items for proxy feed (default: 20)")
+    g.add_argument("--caido-url", metavar="URL",
+                   help="Caido API URL (default: %s)" % CAIDO_DEFAULT_URL)
+    g.add_argument("--burp-url", metavar="URL",
+                   help="Burp REST API URL (default: %s)" % BURP_DEFAULT_URL)
+    g.add_argument("--caido-token", metavar="TOKEN",
+                   help="Caido authentication token")
+    g.add_argument("--record", action="store_true",
+                   help="record in the uploads table (requires the database)")
     args = ap.parse_args()
 
     if args.detect:
         backends = detect_backends()
         for name, info in backends.items():
-            status = "YES" if info.get("available") else "no"
+            st = "YES" if info.get("available") else "no"
             detail = info.get("tool") or info.get("url") or ""
-            print("  %-8s %-4s  %s" % (name, status, detail))
+            print("  %-8s %-4s  %s" % (name, st, detail))
         return
-
-    if not (args.capture or args.caido or args.burp):
-        ap.print_help()
-        return
-
-    backend = "os"
-    if args.caido:
-        backend = "caido"
-    elif args.burp:
-        backend = "burp"
 
     conn = None
-    if args.record:
-        conn = common.connect()
-        common.init_db(conn)
+    if args.record or args.feed or args.timeline or args.collect:
+        try:
+            conn = common.connect()
+            common.init_db(conn)
+        except Exception:
+            pass
 
     try:
+        if args.timeline:
+            result = build_timeline(args.target, lead_ref=args.ref)
+            if not result["count"]:
+                print("no evidence files found")
+                return
+            path = export_timeline(args.target, lead_ref=args.ref)
+            print("timeline: %s (%d files)" % (path, result["count"]))
+            return
+
+        if args.feed:
+            if not args.target:
+                sys.exit("--feed requires --target")
+            hosts = [h.strip() for h in args.hosts.split(",")] if args.hosts else None
+            backend = "caido" if args.caido else ("burp" if args.burp else "auto")
+            result = proxy_feed(
+                target_slug=args.target, backend=backend, hosts=hosts,
+                limit=args.limit, caido_url=args.caido_url, burp_url=args.burp_url,
+                caido_token=args.caido_token, conn=conn)
+            print("feed: %d requests captured via %s (hosts: %s)" % (
+                result["count"], result["backend"], ", ".join(result["hosts"])))
+            for p in result["saved"]:
+                print("  %s" % p)
+            return
+
+        if args.collect:
+            files = collect_evidence(args.target)
+            if not files:
+                print("no evidence files found")
+                return
+            total = sum(f["size"] for f in files)
+            print("evidence for %s: %d files, %d bytes total" % (
+                args.target or "(all)", len(files), total))
+            for f in files:
+                print("  %-40s %8d  %s" % (f["name"], f["size"], f["mime"]))
+            return
+
+        if not (args.capture or args.caido or args.burp):
+            ap.print_help()
+            return
+
+        backend = "os"
+        if args.caido:
+            backend = "caido"
+        elif args.burp:
+            backend = "burp"
+
         result = capture(
             backend=backend,
             target_slug=args.target,
