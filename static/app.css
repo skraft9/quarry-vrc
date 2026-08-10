@@ -1445,6 +1445,16 @@ a.statechip:hover { text-decoration: none; border-color: var(--accent); }
   color: var(--text-dim);
 }
 
+/* invitation rows */
+.inv-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 0; border-bottom: 1px solid var(--line-soft);
+}
+.inv-row:last-of-type { border-bottom: none; }
+.inv-info { flex: 1; min-width: 0; }
+.inv-info strong { font-size: 13px; }
+.inv-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
 /* ------------------------------------------------------------- bounty card */
 .moneycard { margin-bottom: 12px; }
 .moneytiles {
