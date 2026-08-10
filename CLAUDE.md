@@ -81,16 +81,22 @@ The end state after a release is `main`, `dev` and nothing else - sweep merged b
 
 ### Release-note format (the standard)
 
-A release note is real software release notes, not a one-line summary. Structure:
+The canonical, citable version lives in the private repo at `docs/standards/RELEASE_NOTE_STANDARD.md`;
+this is the self-contained copy for the public repo. A release note is real software release notes,
+not a one-line summary. Structure:
 
-1. A `## vX.Y.Z - <headline>` title, then one paragraph saying what shipped and why it matters.
+1. A `## vX.Y.Z - <Headline In Title Case>` title - capitalize the first letter of every word - then
+   one paragraph saying what shipped and why it matters.
 2. Sections in THIS order, and **print only the sections that have content** (omit an empty one
-   entirely): **Features**, **Fixes**, **Security**, **Performance**, **Docs**, **Upgrade notes**.
-3. Each bullet describes the USER-FACING impact - what changed and why it matters - not the diff.
-   Bold the subject of the bullet.
-4. Where the history carries PRs, cite them by number alone (`#N`); GitHub renders the number as the
-   PR's own title, so do not repeat the title.
-5. **Upgrade notes** always says how to update and anything a user must do or know before upgrading.
+   entirely): **Features**, **Fixes**, **Security**, **Performance**, **Docs**, **Upgrade notes**, and
+   **Contributors** last.
+3. A bullet tied to a PR LEADS with the number, `* #N - <what it did>`, and describes the user-facing
+   impact, not the diff. GitHub renders `#N` as the PR's own title in a hyperlink, so do NOT restate
+   that title: no bold subject repeating it, no re-typing it. A bullet with no PR may bold its subject.
+4. **Upgrade notes** always says how to update and anything a user must do or know before upgrading.
+5. **Contributors** closes the notes whenever an outside contributor shipped in the release: tag each
+   by handle and list their PRs, for example `* @handle - #6, #7`. It is a courtesy, included on every
+   release that carries external work.
 
 This is a living standard; extend it deliberately over time rather than letting notes drift back to
 one-liners.
