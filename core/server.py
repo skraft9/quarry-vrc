@@ -50,6 +50,11 @@ try:
 except Exception:  # pragma: no cover
     schedule_mod = None
 
+try:
+    import screenshot as screenshot_mod
+except Exception:  # pragma: no cover
+    screenshot_mod = None
+
 
 # ====================================================================== helpers
 def _json_default(o):
@@ -1380,6 +1385,53 @@ def r_upload(ctx, m):
     common.audit(ctx.conn, ctx.user, "upload", "upload", upload_id, stored, ctx.remote)
     return {"ok": True, "upload_id": upload_id, "stored_path": stored,
             "filed_to": filed_to, "sha256": digest, "size": len(data)}
+
+
+# ---------------------------------------------------------------- screenshot
+@route("GET", r"/api/screenshot/backends")
+def r_screenshot_backends(ctx, m):
+    """Which screenshot backends are reachable right now."""
+    if not screenshot_mod:
+        raise HttpError(503, "screenshot module unavailable")
+    return screenshot_mod.detect_backends()
+
+
+@route("POST", r"/api/screenshot", scope="write")
+def r_screenshot(ctx, m):
+    """Capture a screenshot via one of the available backends.
+
+    Body fields:
+      backend      'auto' | 'caido' | 'burp' | 'os'  (default: auto)
+      target       workspace target slug
+      name         label for the filename
+      request_id   Caido request id (for caido backend)
+      item_index   Burp history index (for burp backend)
+      mode         'interactive' | 'fullscreen' | 'window' (for os backend)
+      caido_url    override Caido API URL
+      burp_url     override Burp API URL
+      caido_token  Caido auth token
+    """
+    if not screenshot_mod:
+        raise HttpError(503, "screenshot module unavailable")
+    b = ctx.body or {}
+    try:
+        result = screenshot_mod.capture(
+            backend=b.get("backend", "auto"),
+            target_slug=b.get("target"),
+            name=b.get("name"),
+            request_id=b.get("request_id"),
+            item_index=b.get("item_index"),
+            mode=b.get("mode", "interactive"),
+            caido_url=b.get("caido_url"),
+            burp_url=b.get("burp_url"),
+            caido_token=b.get("caido_token"),
+            conn=ctx.conn,
+        )
+    except RuntimeError as e:
+        raise HttpError(400, str(e))
+    common.audit(ctx.conn, ctx.user, "screenshot", "upload",
+                 result.get("upload_id"), result.get("path"), ctx.remote)
+    return result
 
 
 # ---------------------------------------------------------------- tracker
