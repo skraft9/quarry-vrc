@@ -99,7 +99,7 @@ CREATE INDEX IF NOT EXISTS idx_hacktivity_at ON hacktivity(activity_at);
 
 def ensure_job_state(conn, job):
     """Scheduled-job health, keyed by job name. Self-contained (creates its own table) so this
-    module has no cross-job dependency in the public build."""
+    module has no cross-job dependency."""
     conn.execute("""
         CREATE TABLE IF NOT EXISTS job_state (
           job TEXT PRIMARY KEY, last_run TEXT, last_success TEXT, last_status TEXT,

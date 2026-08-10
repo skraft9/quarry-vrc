@@ -151,7 +151,7 @@ def score_band(score):
     return "none"
 
 # Product tag. Generic: taken from the RSS <category> tags or the feed name in normalize(); there
-# is no vendor-specific product taxonomy in the public build.
+# is no vendor-specific product taxonomy here.
 
 
 # ------------------------------------------------------------------ http

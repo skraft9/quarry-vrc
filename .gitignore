@@ -1,5 +1,5 @@
 # Quarry VRC - never commit an operator's secrets, credentials, data or research.
-# The public repo ships EMPTY. Everything below is generated or brought by the user at runtime.
+# This repo ships EMPTY. Everything below is generated or brought by the user at runtime.
 
 # Secrets and config
 .env
@@ -36,3 +36,8 @@ venv/
 
 # Operator-private denylist for the leak scanner (never commit)
 .private-denylist
+
+# Local working drafts (reviews, release notes) - never committed
+*-DRAFT.md
+*-COMMENT.md
+pr*-review*.md

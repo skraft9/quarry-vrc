@@ -1,23 +1,20 @@
 # Working on Quarry VRC (public)
 
-Instructions for Claude Code / contributor sessions in this repo. This is the PUBLIC, open-source
-build. It mirrors the private codebase's discipline, with two deliberate differences: releases are
-cut on the GitHub Releases page, and **nothing operator-specific is ever committed**.
+Instructions for Claude Code and contributor sessions in this repo. Quarry VRC is an open-source,
+self-hosted console. Nothing personal or credential-bearing is ever committed, and releases are cut
+on the GitHub Releases page.
 
 ## Nothing personal ships
 
-This repo is public (or will be). It must never contain any operator's HackerOne username, API
-credentials, program handles, reports, leads, payloads or research. Everything is bring-your-own at
-runtime and lands only on the (git-ignored) data/workspace/payloads volumes. If you add a file that
-could hold a credential or personal data, add it to `.gitignore` in the same commit.
+This repo is open source. It must never contain anyone's HackerOne username, API credentials, program
+handles, reports, leads, payloads or research. Everything is bring-your-own at runtime and lands only
+on the (git-ignored) data/workspace/payloads volumes. If you add a file that could hold a credential
+or personal data, add it to `.gitignore` in the same commit.
 
-**This was violated once and it must not recur.** The app code was forked from a private codebase
-and shipped real references - an engineer's handle in a denylist, program handles used as code
-examples, an operator's home-directory workspace paths, and a whole product-alias table for one
-private target. The code carries **placeholders** (`ExampleVendor`, `example-connector-*`,
-`vulns_example`, `#0000000`, `<lab-host>`) precisely so a real name is an obvious outlier. Keep it
-that way: never paste a real program name, handle, path, report id or count into code or a comment -
-use the placeholder.
+**Use the placeholders.** The code carries `ExampleVendor`, `example-connector-*`, `vulns_example`,
+`#0000000` and `<lab-host>` precisely so a real name is an obvious outlier. Keep it that way: never
+paste a real program name, handle, path, report id or count into code or a comment - use the
+placeholder.
 
 **The gate: [`scripts/check-no-private-data.sh`](scripts/check-no-private-data.sh) MUST pass before
 every push, PR and release.** It runs two layers:
@@ -58,8 +55,8 @@ Two long-lived branches:
 
 ## Releases go on the GitHub Releases page
 
-A `dev` -> `main` merge is a **release**. Unlike the private repo, the public repo publishes each
-release through the GitHub Releases feature so users get a versioned, downloadable artifact and notes:
+A `dev` -> `main` merge is a **release**, published through the GitHub Releases feature so users get a
+versioned, downloadable artifact and notes:
 
 ```bash
 gh pr create --base main --head dev --title "v1.1.0 - <what shipped>"
@@ -81,22 +78,22 @@ The end state after a release is `main`, `dev` and nothing else - sweep merged b
 
 ### Release-note format (the standard)
 
-The canonical, citable version lives in the private repo at `docs/standards/RELEASE_NOTE_STANDARD.md`;
-this is the self-contained copy for the public repo. A release note is real software release notes,
-not a one-line summary. Structure:
+A release note is real software release notes, not a one-line summary. Structure:
 
 1. A `## vX.Y.Z - <Headline In Title Case>` title - capitalize the first letter of every word - then
    one paragraph saying what shipped and why it matters.
 2. Sections in THIS order, and **print only the sections that have content** (omit an empty one
    entirely): **Features**, **Fixes**, **Security**, **Performance**, **Docs**, **Upgrade notes**, and
    **Contributors** last.
-3. A bullet tied to a PR LEADS with the number, `* #N - <what it did>`, and describes the user-facing
-   impact, not the diff. GitHub renders `#N` as the PR's own title in a hyperlink, so do NOT restate
-   that title: no bold subject repeating it, no re-typing it. A bullet with no PR may bold its subject.
+3. A bullet tied to a PR LEADS with `PR #N`, `* PR #N - <what it did>`, and describes the user-facing
+   impact, not the diff. Use the `PR ` prefix: a GitHub RELEASE body does not preview a bare `#N` the
+   way a PR or issue body does, so `PR #N` is a clear, self-describing reference that still auto-links.
+   Do NOT restate the PR's own title: no bold subject repeating it, no re-typing it. A bullet with no
+   PR may bold its subject.
 4. **Upgrade notes** always says how to update and anything a user must do or know before upgrading.
 5. **Contributors** closes the notes whenever an outside contributor shipped in the release: tag each
-   by handle and list their PRs, for example `* @handle - #6, #7`. It is a courtesy, included on every
-   release that carries external work.
+   by handle and list their PRs, for example `* @handle - PR #6, PR #7`. It is a courtesy, included on
+   every release that carries external work.
 
 This is a living standard; extend it deliberately over time rather than letting notes drift back to
 one-liners.
