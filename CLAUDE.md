@@ -38,10 +38,12 @@ Two long-lived branches:
 - **`dev`** - staging. Work lands here first.
 - **`main`** - what ships. `dev` merges into it as a release.
 
-1. **Branch off `dev`**, never commit directly to `main` or `dev`. Names: `fix/`, `feat/`, `docs/`.
+1. **Branch off `dev`**, never commit directly to `main` or `dev`. Name the branch for its change
+   type: `feat/`, `fix/`, `docs/`, `chore/` (see **PR and commit conventions** below).
 2. **Open a PR into `dev`** (`gh pr create --base dev`). Both suites green first when the app code is
-   present (`python3 tests/test_smoke.py`, `node tests/test_render.js`). Prefix the title `feat:` or
-   `fix:`. Bump `VERSION` in the same commit (minor for behaviour, patch for a fix/docs pass).
+   present (`python3 tests/test_smoke.py`, `node tests/test_render.js`). Prefix the title with the
+   change type (`feat:`, `fix:`, `docs:`, `chore:`). Bump `VERSION` in the same commit (minor for
+   behaviour, patch for a fix/docs/chore pass).
 3. **One PR per KIND of change** - a feature and a docs change never share a PR.
 4. **Every code reference in a PR body (and every release note) is a backticked hyperlink pinned to
    the commit SHA.** Write ``[`server.py`](https://github.com/skraft9/quarry-vrc/blob/<40-char-sha>/server.py)``
@@ -105,3 +107,28 @@ one-liners.
 - **Never commit** `.env`, `config.json`, `secrets.json`, `tls/`, `index.db`, or any workspace/payload
   content. `.gitignore` covers the known ones.
 - **No AI attribution** in commits, PR bodies or files.
+
+## PR and commit conventions
+
+Uniform history and a readable PR list come from one rule: **every branch, commit and PR title starts
+with a change-type prefix, and the branch carries the same prefix.** Pick the one that fits:
+
+- **`feat:`** - a new feature or a change in behaviour. Branch `feat/<slug>`.
+- **`fix:`** - a bug fix. Branch `fix/<slug>`.
+- **`docs:`** - documentation only, no behaviour change. Branch `docs/<slug>`.
+- **`chore:`** - tooling, dependencies, config or cleanup, with no user-facing behaviour change.
+  Branch `chore/<slug>`.
+- **`refactor:`**, **`perf:`**, **`test:`** - use when one fits better, same branch-matches-prefix rule.
+
+Then the look of the subject and the PR:
+
+- **Imperative, lower-case subject after the prefix:** `feat: add the labs tab`, not
+  `feat: Added the Labs Tab`. No trailing period.
+- **One prefix per PR.** If the title needs `and` between two prefixes, it is two PRs (see step 3 of
+  the Delivery workflow).
+- **Match the release-note verb to the prefix.** A `feat:` PR is a Features bullet, a `fix:` a Fixes
+  bullet, and so on, so the notes fall out of the history.
+
+The rest of the PR shape - target `dev`, SHA-pinned backticked links, cite PRs by number, bump
+`VERSION` - lives in the **Delivery workflow** above; this section is only about the prefix and the
+uniform look it buys.
