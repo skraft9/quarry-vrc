@@ -1,23 +1,20 @@
 # Working on Quarry VRC (public)
 
-Instructions for Claude Code / contributor sessions in this repo. This is the PUBLIC, open-source
-build. It mirrors the private codebase's discipline, with two deliberate differences: releases are
-cut on the GitHub Releases page, and **nothing operator-specific is ever committed**.
+Instructions for Claude Code and contributor sessions in this repo. Quarry VRC is an open-source,
+self-hosted console. Nothing personal or credential-bearing is ever committed, and releases are cut
+on the GitHub Releases page.
 
 ## Nothing personal ships
 
-This repo is public (or will be). It must never contain any operator's HackerOne username, API
-credentials, program handles, reports, leads, payloads or research. Everything is bring-your-own at
-runtime and lands only on the (git-ignored) data/workspace/payloads volumes. If you add a file that
-could hold a credential or personal data, add it to `.gitignore` in the same commit.
+This repo is open source. It must never contain anyone's HackerOne username, API credentials, program
+handles, reports, leads, payloads or research. Everything is bring-your-own at runtime and lands only
+on the (git-ignored) data/workspace/payloads volumes. If you add a file that could hold a credential
+or personal data, add it to `.gitignore` in the same commit.
 
-**This was violated once and it must not recur.** The app code was forked from a private codebase
-and shipped real references - an engineer's handle in a denylist, program handles used as code
-examples, an operator's home-directory workspace paths, and a whole product-alias table for one
-private target. The code carries **placeholders** (`ExampleVendor`, `example-connector-*`,
-`vulns_example`, `#0000000`, `<lab-host>`) precisely so a real name is an obvious outlier. Keep it
-that way: never paste a real program name, handle, path, report id or count into code or a comment -
-use the placeholder.
+**Use the placeholders.** The code carries `ExampleVendor`, `example-connector-*`, `vulns_example`,
+`#0000000` and `<lab-host>` precisely so a real name is an obvious outlier. Keep it that way: never
+paste a real program name, handle, path, report id or count into code or a comment - use the
+placeholder.
 
 **The gate: [`scripts/check-no-private-data.sh`](scripts/check-no-private-data.sh) MUST pass before
 every push, PR and release.** It runs two layers:
@@ -58,8 +55,8 @@ Two long-lived branches:
 
 ## Releases go on the GitHub Releases page
 
-A `dev` -> `main` merge is a **release**. Unlike the private repo, the public repo publishes each
-release through the GitHub Releases feature so users get a versioned, downloadable artifact and notes:
+A `dev` -> `main` merge is a **release**, published through the GitHub Releases feature so users get a
+versioned, downloadable artifact and notes:
 
 ```bash
 gh pr create --base main --head dev --title "v1.1.0 - <what shipped>"
@@ -81,9 +78,7 @@ The end state after a release is `main`, `dev` and nothing else - sweep merged b
 
 ### Release-note format (the standard)
 
-The canonical, citable version lives in the private repo at `docs/standards/RELEASE_NOTE_STANDARD.md`;
-this is the self-contained copy for the public repo. A release note is real software release notes,
-not a one-line summary. Structure:
+A release note is real software release notes, not a one-line summary. Structure:
 
 1. A `## vX.Y.Z - <Headline In Title Case>` title - capitalize the first letter of every word - then
    one paragraph saying what shipped and why it matters.

@@ -7,7 +7,7 @@ anything not on a volume would be lost the first time you `docker compose pull`.
 
 ```
 container: python:3.12-slim  (no pip layer - Python standard library only)
-  entrypoint: ThreadingHTTPServer   (server.py; replaces the private build's systemd unit)
+  entrypoint: ThreadingHTTPServer   (server.py runs as the container process)
   reads   config.json               (generated on first boot from env, on the data volume)
   serves  one HTTPS port            (published, default 8443)
 

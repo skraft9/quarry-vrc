@@ -937,7 +937,7 @@ is Python standard library only.
 | Command | Purpose |
 |---|---|
 | `scripts/sync-payloads.sh [root]` | Clone or update the payload reference and rebuild the index. |
-| `scripts/check-no-private-data.sh` | Refuse to let operator-private data reach the public repo. Run before every push, PR and release. |
+| `scripts/check-no-private-data.sh` | Refuse to let private data reach the repository. Run before every push, PR and release. |
 
 ---
 
