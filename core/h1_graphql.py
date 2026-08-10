@@ -177,7 +177,7 @@ def list_program_invitations(session_token=None):
     }
     """
     data = _graphql(query, session_token=session_token)
-    invitations = data.get("me", {}).get("soft_launch_invitations", {})
+    invitations = (data.get("me") or {}).get("soft_launch_invitations", {})
     nodes = invitations.get("nodes") or []
     out = []
     for n in nodes:
@@ -277,7 +277,7 @@ def list_collab_invitations(session_token=None):
     }
     """
     data = _graphql(query, session_token=session_token)
-    invitations = data.get("me", {}).get("collaboration_invitations", {})
+    invitations = (data.get("me") or {}).get("collaboration_invitations", {})
     nodes = invitations.get("nodes") or []
     out = []
     for n in nodes:
