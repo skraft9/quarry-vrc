@@ -50,6 +50,11 @@ try:
 except Exception:  # pragma: no cover
     schedule_mod = None
 
+try:
+    import screenshot as screenshot_mod
+except Exception:  # pragma: no cover
+    screenshot_mod = None
+
 
 # ====================================================================== helpers
 def _json_default(o):
@@ -1380,6 +1385,128 @@ def r_upload(ctx, m):
     common.audit(ctx.conn, ctx.user, "upload", "upload", upload_id, stored, ctx.remote)
     return {"ok": True, "upload_id": upload_id, "stored_path": stored,
             "filed_to": filed_to, "sha256": digest, "size": len(data)}
+
+
+# ---------------------------------------------------------------- screenshot
+@route("GET", r"/api/screenshot/backends")
+def r_screenshot_backends(ctx, m):
+    """Which screenshot backends are reachable right now."""
+    if not screenshot_mod:
+        raise HttpError(503, "screenshot module unavailable")
+    return screenshot_mod.detect_backends()
+
+
+@route("POST", r"/api/screenshot", scope="write")
+def r_screenshot(ctx, m):
+    """Capture a screenshot via one of the available backends.
+
+    Body fields:
+      backend      'auto' | 'caido' | 'burp' | 'os'  (default: auto)
+      target       workspace target slug
+      name         label for the filename
+      request_id   Caido request id (for caido backend)
+      item_index   Burp history index (for burp backend)
+      mode         'interactive' | 'fullscreen' | 'window' (for os backend)
+      caido_url    override Caido API URL
+      burp_url     override Burp API URL
+      caido_token  Caido auth token
+    """
+    if not screenshot_mod:
+        raise HttpError(503, "screenshot module unavailable")
+    b = ctx.body or {}
+    try:
+        result = screenshot_mod.capture(
+            backend=b.get("backend", "auto"),
+            target_slug=b.get("target"),
+            name=b.get("name"),
+            request_id=b.get("request_id"),
+            item_index=b.get("item_index"),
+            mode=b.get("mode", "interactive"),
+            caido_url=b.get("caido_url"),
+            burp_url=b.get("burp_url"),
+            caido_token=b.get("caido_token"),
+            conn=ctx.conn,
+        )
+    except RuntimeError as e:
+        raise HttpError(400, str(e))
+    common.audit(ctx.conn, ctx.user, "screenshot", "upload",
+                 result.get("upload_id"), result.get("path"), ctx.remote)
+    return result
+
+
+@route("GET", r"/api/evidence/(\w[\w-]*)")
+def r_evidence_list(ctx, m):
+    """List all evidence files for a target workspace."""
+    if not screenshot_mod:
+        raise HttpError(503, "screenshot module unavailable")
+    target = m.group(1)
+    files = screenshot_mod.collect_evidence(target)
+    return {"target": target, "files": files, "count": len(files),
+            "total_bytes": sum(f["size"] for f in files)}
+
+
+@route("GET", r"/api/evidence/(\w[\w-]*)/timeline")
+def r_evidence_timeline(ctx, m):
+    """Build an evidence timeline for a target workspace."""
+    if not screenshot_mod:
+        raise HttpError(503, "screenshot module unavailable")
+    target = m.group(1)
+    ref = ctx.q("ref")
+    result = screenshot_mod.build_timeline(target, lead_ref=ref)
+    return result
+
+
+@route("POST", r"/api/evidence/(\w[\w-]*)/timeline", scope="write")
+def r_evidence_timeline_export(ctx, m):
+    """Export the evidence timeline as a markdown file."""
+    if not screenshot_mod:
+        raise HttpError(503, "screenshot module unavailable")
+    target = m.group(1)
+    ref = (ctx.body or {}).get("ref") or ctx.q("ref")
+    try:
+        path = screenshot_mod.export_timeline(target, lead_ref=ref)
+    except RuntimeError as e:
+        raise HttpError(400, str(e))
+    common.audit(ctx.conn, ctx.user, "timeline_export", "evidence", None, path, ctx.remote)
+    return {"ok": True, "path": path, "filename": os.path.basename(path)}
+
+
+@route("POST", r"/api/evidence/(\w[\w-]*)/feed", scope="write")
+def r_evidence_feed(ctx, m):
+    """Pull matching proxy traffic for a target and save as evidence.
+
+    Body fields:
+      backend      'auto' | 'caido' | 'burp'
+      hosts        list of hostnames to filter (overrides scope lookup)
+      limit        max items to pull (default: 20)
+      caido_url    override Caido API URL
+      burp_url     override Burp API URL
+      caido_token  Caido auth token
+    """
+    if not screenshot_mod:
+        raise HttpError(503, "screenshot module unavailable")
+    target = m.group(1)
+    b = ctx.body or {}
+    hosts = b.get("hosts")
+    if isinstance(hosts, str):
+        hosts = [h.strip() for h in hosts.split(",") if h.strip()]
+    try:
+        result = screenshot_mod.proxy_feed(
+            target_slug=target,
+            backend=b.get("backend", "auto"),
+            hosts=hosts,
+            limit=min(int(b.get("limit", 20)), 100),
+            caido_url=b.get("caido_url"),
+            burp_url=b.get("burp_url"),
+            caido_token=b.get("caido_token"),
+            conn=ctx.conn,
+        )
+    except RuntimeError as e:
+        raise HttpError(400, str(e))
+    common.audit(ctx.conn, ctx.user, "proxy_feed", "evidence", None,
+                 "%s: %d captured via %s" % (target, result["count"], result["backend"]),
+                 ctx.remote)
+    return result
 
 
 # ---------------------------------------------------------------- tracker
