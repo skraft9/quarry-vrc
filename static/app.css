@@ -730,7 +730,7 @@ table.data th.tiny, table.data td.tiny { padding-left: 7px; padding-right: 7px; 
 }
 .privpill.priv-none { color: var(--warn); border-color: var(--warn); }
 .privpill.priv-low { color: var(--info); border-color: var(--info); }
-.privpill.priv-high { color: var(--text-mute); }
+.privpill.priv-high { color: var(--danger); border-color: var(--danger); }
 
 /* Impact on Confidentiality / Integrity / Availability, decoded from the CVSS vector. One
    coloured letter badge per impacted dimension, with an up arrow for High and a down arrow for

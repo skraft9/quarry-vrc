@@ -1200,6 +1200,8 @@
      is otherwise buried mid-vector. Rows with no vector show a dash; 21 of 111 reports and 119
      of 266 advisories have none, and that gap is real data, not a zero. */
   var PRIV_CLASS = { 'None': 'priv-none', 'Low': 'priv-low', 'High': 'priv-high' };
+  /* Compact one-letter badge in the PRIV column (N / L / H); the full word stays in the title. */
+  var PRIV_SHORT = { 'None': 'N', 'Low': 'L', 'High': 'H' };
 
   function privCell(r) {
     var d = r && r.cvss_decoded;
@@ -1208,7 +1210,7 @@
     return el('span', {
       class: 'privpill ' + (PRIV_CLASS[v] || ''),
       title: 'Privileges required: ' + v + (r.cvss_vector ? '\n' + r.cvss_vector : ''),
-      text: v
+      text: (PRIV_SHORT[v] || v)
     });
   }
 
