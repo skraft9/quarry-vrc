@@ -64,6 +64,14 @@ docker compose up -d
 - Open the printed URL, sign in, and connect your HackerOne account in **Integrations**.
 - Full walkthrough in [`docs/SETUP.md`](docs/SETUP.md).
 
+### Documentation
+
+- **[`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) is the complete manual** - every feature, every tab,
+  the CLI and the HTTP API, in one place. Start here when you want more than the quick start.
+- [`docs/SETUP.md`](docs/SETUP.md) - first-run walkthrough.
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) - the one-container, three-volume model.
+- [`docs/AGENTS.md`](docs/AGENTS.md) - driving Quarry with an agentic AI.
+
 ### Usage
 
 Most of this happens through the UI, but the same operations run on the CLI inside the container
