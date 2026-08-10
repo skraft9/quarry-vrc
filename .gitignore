@@ -36,3 +36,8 @@ venv/
 
 # Operator-private denylist for the leak scanner (never commit)
 .private-denylist
+
+# Local working drafts (reviews, release notes) - never committed
+*-DRAFT.md
+*-COMMENT.md
+pr*-review*.md
