@@ -260,10 +260,14 @@ House rules:
 
 - **One change-type prefix per PR, and the branch carries the same one** so the history reads the
   same for everyone: `feat:` (a feature or behaviour change), `fix:` (a bug fix), `docs:` (docs only),
-  `chore:` (tooling or cleanup). Keep the subject imperative and lower-case - `feat: add the labs tab`.
+  `chore:` (tooling or cleanup), `security:` (a fix or hardening that closes a security finding).
+  Keep the subject imperative and lower-case - `feat: add the labs tab`.
 - **One PR per kind of change** - a feature and a docs change are two PRs, even in one sitting.
-- **Bump `VERSION`** in the same PR: a feature moves the minor (`1.x.0`), a fix, docs or chore pass
-  moves the patch (`1.0.x`).
+- **A structured PR body, not a wall of text** - a one-line summary, then labelled one-line bullets:
+  what changed (SHA-pinned backticked links), what it resolves, how it was verified.
+- **Bump `VERSION`** in the same PR: a feature moves the minor (`1.x.0`), a fix, docs, chore or
+  security pass moves the patch (`1.0.x`). A batch of security fixes released together shares one
+  patch bump and ships as one release with a **Security** section in the notes.
 - **Link the code you touch** in the PR body as a backticked, SHA-pinned hyperlink, and cite other
   PRs by their number (GitHub renders it as the PR's own title).
 - **Run `scripts/check-no-private-data.sh` before every PR**; it gates against committing secrets or
