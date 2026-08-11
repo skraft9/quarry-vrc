@@ -1,12 +1,19 @@
 # Contributing to Quarry VRC
 
-The front door for anyone changing quarry-vrc's code or docs. It is short on purpose; the deeper,
-agent-oriented version of the same process lives in [`CLAUDE.md`](CLAUDE.md), and security work has
-its own standard in
+The one guide for anyone changing quarry-vrc's code or docs, human or AI coding agent. Security work
+has its own standard in
 [`docs/contributing/SECURITY_RESPONSE_STANDARD.md`](docs/contributing/SECURITY_RESPONSE_STANDARD.md).
 
 If you are here to USE quarry-vrc rather than change it, you want the [README](README.md) and
 [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) instead. This file is for contributors.
+
+## Nothing personal ships
+
+This repo is open source. It must never contain a real HackerOne username, API credential, program
+handle, report, lead or payload; all of that is bring-your-own at runtime and lands only on
+git-ignored volumes. The code uses placeholders (`ExampleVendor`, `vulns_example`, `#0000000`,
+`<lab-host>`) so a real name is an obvious outlier. Keep it that way, and the gate below enforces the
+structural half of it.
 
 ## Branches
 
@@ -61,6 +68,14 @@ Versions run on the `1.x` beta line and move up by one with no gaps; the officia
 them released together shares ONE patch bump and ships as a single release with a **Security** section
 in the notes. A `dev` -> `main` merge is titled with the version and cut on the Releases page.
 
+## Release notes
+
+A release note is real release notes, not a one-liner. Title it `## vX.Y.Z - <Headline In Title Case>`
+with a sentence on what shipped, then only the sections that have content, in order: **Features**,
+**Fixes**, **Security**, **Performance**, **Docs**, **Upgrade notes**, and **Contributors** last. A
+bullet tied to a PR leads with `PR #N` and says what it did for the user, not the diff. Any release
+that includes security work carries the **Security** section.
+
 ## Before every PR
 
 - **Run [`scripts/check-no-private-data.sh`](scripts/check-no-private-data.sh)**; it gates against
@@ -68,9 +83,11 @@ in the notes. A `dev` -> `main` merge is titled with the version and cut on the 
 - **Standard library only** - no pip, npm or CDN - and **ASCII punctuation** everywhere. Never commit
   a secret, `.env`, `config.json` or any workspace or payload content (`.gitignore` covers the known
   ones).
+- **No AI attribution** in commits, PR bodies or files, and no reviewer-directed notes in them either:
+  a PR body reads as authored change notes, not as a message to the maintainer.
 
 ## AI coding agents
 
-If you are an AI coding agent (Claude Code or similar), read [`CLAUDE.md`](CLAUDE.md) first: it is the
-same process with the extra operational detail an agent needs, and it is the authority when the two
-differ.
+Claude Code and other agents follow this same guide; there is no separate agent file. Read it, and the
+[security response standard](docs/contributing/SECURITY_RESPONSE_STANDARD.md) for security work, before
+making changes.
