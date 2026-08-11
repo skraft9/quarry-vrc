@@ -9,6 +9,11 @@ on:
     branches: [main, dev]
   pull_request:
 
+# Least privilege: this workflow only checks out the repo and runs a scan script. It never
+# writes to the repo, so the GITHUB_TOKEN is scoped to read-only contents.
+permissions:
+  contents: read
+
 jobs:
   scan:
     runs-on: ubuntu-latest
