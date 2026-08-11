@@ -1,5 +1,11 @@
 # Working on Quarry VRC (public)
 
+> **This file is build instructions for developers and AI coding agents working ON quarry-vrc. It is
+> not a user guide.** If you are running quarry-vrc to hunt, start at the [README](README.md) and
+> [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md). Human contributors: the front door is
+> [`CONTRIBUTING.md`](CONTRIBUTING.md); this file is the fuller, agent-oriented version of the same
+> process.
+
 Instructions for Claude Code and contributor sessions in this repo. Quarry VRC is an open-source,
 self-hosted console. Nothing personal or credential-bearing is ever committed, and releases are cut
 on the GitHub Releases page.
@@ -39,11 +45,12 @@ Two long-lived branches:
 - **`main`** - what ships. `dev` merges into it as a release.
 
 1. **Branch off `dev`**, never commit directly to `main` or `dev`. Name the branch for its change
-   type: `feat/`, `fix/`, `docs/`, `chore/` (see **PR and commit conventions** below).
+   type: `feat/`, `fix/`, `docs/`, `chore/`, `security/` (see **PR and commit conventions** below).
 2. **Open a PR into `dev`** (`gh pr create --base dev`). Both suites green first when the app code is
    present (`python3 tests/test_smoke.py`, `node tests/test_render.js`). Prefix the title with the
-   change type (`feat:`, `fix:`, `docs:`, `chore:`). Bump `VERSION` in the same commit (minor for
-   behaviour, patch for a fix/docs/chore pass).
+   change type (`feat:`, `fix:`, `docs:`, `chore:`, `security:`). Bump `VERSION` in the same commit
+   (minor for behaviour, patch for a fix/docs/chore/security pass; a security batch shares one patch
+   bump, see the Versioning note below).
 3. **One PR per KIND of change** - a feature and a docs change never share a PR.
 4. **Every code reference in a PR body (and every release note) is a backticked hyperlink pinned to
    the commit SHA.** Write ``[`server.py`](https://github.com/skraft9/quarry-vrc/blob/<40-char-sha>/server.py)``
@@ -75,6 +82,14 @@ Releases page. **Every version and sub-version gets its own tag and release, inc
 with no gaps** - the next release is exactly one step above the current tag. A gap reads as a lost
 release; it usually comes from batching UNRELATED changes into one release (which consumes the
 skipped numbers). Batch a coherent task list, never unrelated work.
+
+**Security fixes move the patch, never the minor or major on their own.** A single security fix, or
+a coherent batch of them released together, ships at exactly one patch above the current tag (for
+example `1.4.0` -> `1.4.1`). A batch shares ONE patch bump, not one per PR: the first security PR in
+the batch moves `VERSION`, the rest leave it, and one release is cut at that version. Security fixes
+ride a minor or major release only when folded into the next batch release that also carries
+development work; on their own they are always a patch. Every release that includes security work
+carries a **Security** section in its notes recapping each security PR (see the format below).
 
 The end state after a release is `main`, `dev` and nothing else - sweep merged branches.
 
@@ -118,6 +133,10 @@ with a change-type prefix, and the branch carries the same prefix.** Pick the on
 - **`docs:`** - documentation only, no behaviour change. Branch `docs/<slug>`.
 - **`chore:`** - tooling, dependencies, config or cleanup, with no user-facing behaviour change.
   Branch `chore/<slug>`.
+- **`security:`** - a fix or hardening that closes a security finding (a code-scanning alert or a
+  reported weakness) or removes a security weakness. Branch `security/<slug>`. It is its own kind so
+  the history and release notes surface security work. Handling triage, dismissals and fixes end to
+  end is [`docs/contributing/SECURITY_RESPONSE_STANDARD.md`](docs/contributing/SECURITY_RESPONSE_STANDARD.md).
 - **`refactor:`**, **`perf:`**, **`test:`** - use when one fits better, same branch-matches-prefix rule.
 
 Then the look of the subject and the PR:
@@ -126,8 +145,13 @@ Then the look of the subject and the PR:
   `feat: Added the Labs Tab`. No trailing period.
 - **One prefix per PR.** If the title needs `and` between two prefixes, it is two PRs (see step 3 of
   the Delivery workflow).
+- **A structured body, not a wall of text.** Lead with a one-line summary of what changed and why,
+  then short labelled groups, each group a one-line bullet (no hard wrap): **What changed** (edits,
+  each code reference a SHA-pinned backticked link), **Resolves** (the issue, finding or alert it
+  closes), **Verification** (gate, compile, suites, the `VERSION` it lands). A `security:` body also
+  names the CWE and the code-scanning rule id, and cites alerts in words, not as `#N`.
 - **Match the release-note verb to the prefix.** A `feat:` PR is a Features bullet, a `fix:` a Fixes
-  bullet, and so on, so the notes fall out of the history.
+  bullet, a `security:` a Security bullet, and so on, so the notes fall out of the history.
 
 The rest of the PR shape - target `dev`, SHA-pinned backticked links, cite PRs by number, bump
 `VERSION` - lives in the **Delivery workflow** above; this section is only about the prefix and the
