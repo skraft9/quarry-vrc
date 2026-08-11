@@ -243,7 +243,7 @@ machine or a private host you control**, and is not hardened for the public inte
 ## <img src="docs/img/gem-sm.svg" width="18" align="top" alt=""> Contributing
 
 Two long-lived branches, and every change goes through a pull request so it stays reviewable and
-revertable.
+revertable. The full contributor guide is [`CONTRIBUTING.md`](CONTRIBUTING.md); the essentials:
 
 - **`dev`** is the staging branch - work lands here first.
 - **`main`** is what ships; `dev` merges into it as a **release**, cut on the GitHub

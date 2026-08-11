@@ -1,5 +1,11 @@
 # Working on Quarry VRC (public)
 
+> **This file is build instructions for developers and AI coding agents working ON quarry-vrc. It is
+> not a user guide.** If you are running quarry-vrc to hunt, start at the [README](README.md) and
+> [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md). Human contributors: the front door is
+> [`CONTRIBUTING.md`](CONTRIBUTING.md); this file is the fuller, agent-oriented version of the same
+> process.
+
 Instructions for Claude Code and contributor sessions in this repo. Quarry VRC is an open-source,
 self-hosted console. Nothing personal or credential-bearing is ever committed, and releases are cut
 on the GitHub Releases page.
@@ -130,7 +136,7 @@ with a change-type prefix, and the branch carries the same prefix.** Pick the on
 - **`security:`** - a fix or hardening that closes a security finding (a code-scanning alert or a
   reported weakness) or removes a security weakness. Branch `security/<slug>`. It is its own kind so
   the history and release notes surface security work. Handling triage, dismissals and fixes end to
-  end is [`standards/SECURITY_RESPONSE_STANDARD.md`](standards/SECURITY_RESPONSE_STANDARD.md).
+  end is [`docs/contributing/SECURITY_RESPONSE_STANDARD.md`](docs/contributing/SECURITY_RESPONSE_STANDARD.md).
 - **`refactor:`**, **`perf:`**, **`test:`** - use when one fits better, same branch-matches-prefix rule.
 
 Then the look of the subject and the PR:
