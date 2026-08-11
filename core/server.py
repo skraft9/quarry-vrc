@@ -2734,6 +2734,14 @@ def r_audit(ctx, m):
 
 
 # ====================================================================== handler
+def _no_crlf(value):
+    """Strip CR and LF from an outgoing header value so a user-influenced string - a guessed
+    MIME type, a Content-Disposition filename built from a browse path - can never inject
+    additional response headers or split the response (CWE-113). Header NAMES in this server
+    are all internal constants, but values are sanitised at the single choke point in _send."""
+    return re.sub(r"[\r\n]", "", str(value))
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "app/" + VERSION   # name-independent on purpose
     sys_version = ""
@@ -2752,7 +2760,7 @@ class Handler(BaseHTTPRequestHandler):
         if raw is None:
             raw = json.dumps(payload, default=_json_default).encode("utf-8")
         self.send_response(status)
-        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Type", _no_crlf(content_type))
         self.send_header("Content-Length", str(len(raw)))
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("X-Frame-Options", "DENY")
@@ -2764,7 +2772,7 @@ class Handler(BaseHTTPRequestHandler):
         if getattr(self, "set_cookie", None):
             self.send_header("Set-Cookie", self.set_cookie)
         for k, v in (extra_headers or {}).items():
-            self.send_header(k, v)
+            self.send_header(_no_crlf(k), _no_crlf(v))
         self.end_headers()
         if self.command != "HEAD":
             self.wfile.write(raw)
