@@ -1,12 +1,20 @@
 # Security Response Standard
 
-How this project responds to a code-scanning alert (CodeQL, on `main`) or any other reported
-security finding: how to triage it, how to record the decision so it survives, and how to fix it
-inside the existing PR conventions. It is a living standard; extend it as the process sharpens.
+How this project responds to a security finding: how to triage it, how to record the decision so it
+survives, and how to fix it inside the existing PR conventions. It is a living standard; extend it as
+the process sharpens.
 
-The goal is that every alert reaches one of exactly two resting states with a written reason
-attached: **dismissed** (a false positive or an accepted non-issue) or **fixed** (a real defect
-closed by a merged change). No alert is left sitting open with nobody having said why.
+**A finding arrives one of two ways, and the response differs:**
+
+- An **internal scan** - CodeQL code scanning on `main` - surfaces an issue in our own code, in the
+  open. This is the default the sections below are written for.
+- An **external report** - a researcher using GitHub private vulnerability reporting - arrives
+  confidentially. It is handled under embargo until a fix and an advisory ship together. See
+  [Externally reported vulnerabilities](#externally-reported-vulnerabilities) for where it differs.
+
+The goal is the same for both: every finding reaches one of exactly two resting states with a written
+reason attached: **dismissed** (a false positive or an accepted non-issue) or **fixed** (a real defect
+closed by a merged change). No finding is left sitting open with nobody having said why.
 
 ## The `security:` change type
 
@@ -136,6 +144,59 @@ labelled groups, each group a one-line bullet (no hard wrap, because GitHub refl
 - **Every release that includes security work carries a `Security` section** in its notes (the
   release-note format already orders it after Fixes), recapping each security PR: `* PR #N - <what it
   hardened>`, the user-facing effect and the CWE, not the diff.
+
+## Externally reported vulnerabilities
+
+Everything above is about a scan of our own code, in the open. A vulnerability someone else finds is
+different: it arrives confidentially and is handled under embargo. This section is the structure for
+that; it will deepen as we actually field reports.
+
+A researcher reports through GitHub **private vulnerability reporting** (the "Report a vulnerability"
+button on the Security tab), which is enabled on this repo and described in the repo's
+[`SECURITY.md`](../../SECURITY.md) policy, not as a public issue. From intake to disclosure, nothing
+about the report goes in a public issue, PR, branch or commit until the fix and its advisory publish
+together.
+
+1. **Acknowledge receipt.** Tell the reporter it is received and being looked at, and keep it
+   embargoed: nothing about it goes in a public issue, PR, branch or commit yet.
+2. **Triage, validate and dupe-check.** Reproduce it, establish the affected versions, and decide
+   real, duplicate or not-a-vulnerability. Score severity with CVSS. Keep the reporter posted and
+   agree a disclosure timeline. A not-a-vuln or a duplicate is closed here with a reason to the
+   reporter - the same "no finding is left without a written reason" rule as a dismissal - and nothing
+   further is opened for it.
+3. **Open a draft advisory, once it is confirmed real and not a duplicate.** Only now open a draft
+   GitHub Security Advisory (GHSA) as the private workspace: it holds the write-up, the affected
+   versions, the severity, and a private fork where the fix is built without exposing the issue in a
+   public branch. A report that fails validation never reaches this step.
+4. **Fix under embargo.** Build the fix in the advisory's private fork under the normal `security:` PR
+   conventions, but do not push the branch or open the PR in the open until disclosure. The fix rides
+   a release like any other security fix: a patch, batched if it is part of a coherent set.
+5. **Publish, request a CVE, credit.** When the fix is ready, publish the advisory and release the fix
+   together. Request a CVE ID through the draft advisory (GitHub is a CNA and issues one), so the
+   fixed version carries a referenceable id. Credit the reporter unless they ask otherwise, and link
+   the advisory from the release note's Security section.
+6. **Decide whether it even needs a CVE.** A confirmed vulnerability in a RELEASED version that a user
+   must act on wants a CVE and a published advisory. One fixed before it ever shipped, or that only
+   touches the dev process rather than a release, is fixed and noted but needs no CVE. When unsure,
+   lean toward publishing the advisory: a CVE is cheap, an unannounced real vulnerability is not.
+
+## What is safe to publish
+
+The triage record is public for internal scan findings and private for external reports until
+disclosure. Draw the line by what a reader could DO with what is written:
+
+- **Safe in the public repo:** that a scan alert was a false positive and the barrier that makes it
+  so; a fixed issue in our own code after the fix has shipped; a dismissal comment reasoning about our
+  own source. quarry-vrc is open source, so describing our own code is not a leak.
+- **Never in the public repo:** a working exploit or weaponizable repro for an UNFIXED issue; the
+  details of an externally reported vulnerability before its fix and advisory ship; a reporter's
+  identity or contact they have not agreed to publish; and anything the no-private-data gate already
+  rejects.
+- **After disclosure**, the advisory is the public record; the public repo may reference it, while the
+  full private triage detail stays in the operator's private notes, not here.
+
+Rule of thumb: nothing that helps someone weaponize an unpatched issue, and nothing personal about a
+reporter, goes in a public commit, comment or file.
 
 ## Verify
 
