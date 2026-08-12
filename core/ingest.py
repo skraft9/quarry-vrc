@@ -53,6 +53,9 @@ IGNORE_DIRS = {
     # HackerOne-synced report bodies. They are already represented by source='hackerone'
     # rows, so indexing the files too would double-count every submission.
     "h1_reports",
+    # Lab harness runbooks and superseded/folded notes. These carry finding-shaped
+    # headings but are not leads, so indexing them would create blank-ref rows.
+    "harness", "archive",
 }
 
 #: Workspace-root file that carries the submitted-report tracker table.

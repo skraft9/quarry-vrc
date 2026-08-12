@@ -148,6 +148,22 @@ A lead moves in one direction along the diagram above, and the status marker is 
 
 The rule that follows: **the moment a note describes more than one finding, it stops being a lead and becomes a hunt log.** A finding proven dead still gets its OWN lead file with `**Status:** killed`, because a kill is only useful if it is individually findable when someone asks "have we tried this".
 
+## Reference IDs: one prefix per target, globally unique
+
+Every lead carries a reference like `A1`, `B7`: a one- or two-letter PREFIX plus a number. Two rules make a ref a stable identity rather than a source of collisions.
+
+**A prefix belongs to exactly one target, and it is globally unique.** Each target you hunt claims its own prefix: the first target is `A`, the second `B`, and so on; when the single letters are used, prefixes grow to two letters (`AA`, `AB`). No two targets share a prefix, so a ref names its target on sight. When you start on a new target, claim the next unused prefix.
+
+**A number is never reused within a target, across ANY class folder.** Refs are numbered per target, so `A20` is one lead whether it sits in `<target>/BAC/` or `<target>/DoS/`. To assign the next one, take the target-wide maximum across every class folder and add one, never the per-folder maximum:
+
+```
+grep -rhoE '^# <PREFIX>[0-9]+ ' <workspace>/<target> --include='*.md' | grep -oE '<PREFIX>[0-9]+' | sort -uV | tail -1
+```
+
+This is enforced. `scripts/check-lead-refs.py` fails when two lead notes carry the same ref, or when one prefix is claimed by more than one target; run it before a release. A duplicate ref is not cosmetic: the post-submit title-sync matches on the ref, so two leads sharing one ref will overwrite each other.
+
+**The HackerOne report id is the true record, so a ref can be renumbered.** A ref is local bookkeeping; the filed report id is not. Renumbering a lead, even a submitted one, is fine as long as the report file keeps its `<h1_id>_<REF>-slug.md` name so the id stays mapped.
+
 ## Hunt logs and session notes
 
 Round logs, sweeps, campaign trackers, queues and dedup analyses go under `notes/` with a dated filename and **no `**Status:**` marker, ever**:
