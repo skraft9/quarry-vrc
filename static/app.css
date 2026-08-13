@@ -824,7 +824,32 @@ a.cwe-badge:hover { border-color: var(--accent); color: var(--accent); }
 .metagrid .v.mono { font-family: var(--mono); font-size: 12px; }
 
 /* dashboard -------------------------------------------------------------- */
-.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)); gap: 14px; margin-bottom: 14px; }
+
+/* Section eyebrow (BOUNTY / OVERVIEW / BREAKDOWN), matching the approved mockup's rhythm. Sits
+   between the dashboard sections; the first one hugs the page head. Hidden on the phone, where the
+   .dash-host reorder swaps Bounty and Overview and a fixed label would sit against the wrong one. */
+.dash-eyebrow {
+  font-size: 11px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--text-mute); margin: 20px 0 10px;
+}
+.dash-host > .dash-eyebrow:first-child { margin-top: 2px; }
+
+/* Thin gradient progress meter under a money tile's number. --bg-sunk is the app's track colour
+   (same one the breakdown bars use); the fill is the accent gradient, so it themes in both modes. */
+.meter {
+  height: 6px; border-radius: 999px; background: var(--bg-sunk);
+  overflow: hidden; margin: 9px 0 3px;
+}
+.meter > i {
+  display: block; height: 100%; border-radius: 999px; min-width: 0;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+}
+
+/* Inline-SVG sparkline under an overview tile's number. The wrapper is the block host el() builds;
+   the svg fills its width and scales to 34px tall. */
+.spark-wrap { display: block; width: 100%; }
+.spark { display: block; width: 100%; height: 34px; margin-top: 10px; }
 
 /* Breakdowns down the left half, hacktivity down the right. align-items:start so hacktivity
    keeps its natural height at the top of its column instead of stretching to match a left
@@ -864,7 +889,7 @@ a.cwe-badge:hover { border-color: var(--accent); color: var(--accent); }
   .dash-side > .hacktivity { position: static; }
   .dash-split .ha-rows { max-width: 640px; overflow: visible; }
 }
-.tile { padding: 12px 14px; }
+.tile { padding: 15px 16px; }
 .tile .n { display: block; font-size: 24px; font-weight: 680; letter-spacing: -.02em; line-height: 1.15; font-variant-numeric: tabular-nums; }
 .tile .k {
   display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
@@ -1483,12 +1508,12 @@ a.statechip:hover { text-decoration: none; border-color: var(--accent); }
 /* ------------------------------------------------------------- bounty card */
 .moneycard { margin-bottom: 12px; }
 .moneytiles {
-  display: grid; gap: 10px; margin-top: 4px;
+  display: grid; gap: 14px; margin-top: 4px;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 }
 .moneytile {
   display: flex; flex-direction: column; gap: 2px;
-  padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 15px 16px; border: 1px solid var(--line); border-radius: var(--radius);
   background: var(--panel-2); text-decoration: none; color: inherit;
 }
 .moneytile:hover { border-color: var(--accent); text-decoration: none; }
@@ -2118,6 +2143,10 @@ body.redacted .md {
   .tile .n { flex: none; min-width: 2.4em; font-size: 22px; }
   .tile .k { flex: 1 1 auto; min-width: 0; }
   .tile .tile-badges { margin-left: auto; }
+  /* The tile is a compact horizontal row on the phone; a full-width sparkline would break it, and
+     the section eyebrows sit against the wrong section once .dash-host reorders. Both drop out. */
+  .tile .spark-wrap { display: none; }
+  .dash-eyebrow { display: none; }
   .moneytiles, .moneytiles-expected { grid-template-columns: minmax(0, 1fr); }
   .moneytile { min-height: 56px; }
   .summary { padding: 10px 12px; gap: 10px 18px; }

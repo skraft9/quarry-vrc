@@ -4354,6 +4354,57 @@
     return api('/unseen?' + qsFrom(q)).catch(function () { return {}; });
   }
 
+  /* Inline-SVG sparkline for a dashboard tile. Pure geometry from a numeric series - no user
+     data reaches it, so the returned markup is safe to hand to innerHTML (see sparkNode). Lifted
+     from the approved dashboard mockup; colours are theme tokens so it follows light/dark. */
+  var sparkSeq = 0;
+  function spark(vals) {
+    if (!vals || !vals.length) vals = [0, 0];
+    if (vals.length === 1) vals = [vals[0], vals[0]];
+    var w = 180, h = 34;
+    var min = Math.min.apply(null, vals), max = Math.max.apply(null, vals);
+    var rng = (max - min) || 1;
+    var n = vals.length;
+    var pts = vals.map(function (v, i) {
+      var x = i / (n - 1) * w;
+      var y = h - 2 - ((v - min) / rng) * (h - 6);
+      return [x, y];
+    });
+    var line = pts.map(function (p, i) {
+      return (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1);
+    }).join(' ');
+    var area = line + ' L' + w + ' ' + h + ' L0 ' + h + ' Z';
+    var gid = 'qspark' + (++sparkSeq);
+    var last = pts[pts.length - 1];
+    return '<svg class="spark" viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none"'
+      + ' aria-hidden="true" focusable="false">'
+      + '<defs><linearGradient id="' + gid + '" x1="0" y1="0" x2="0" y2="1">'
+      + '<stop offset="0" stop-color="var(--accent)" stop-opacity=".28"/>'
+      + '<stop offset="1" stop-color="var(--accent)" stop-opacity="0"/></linearGradient></defs>'
+      + '<path d="' + area + '" fill="url(#' + gid + ')"/>'
+      + '<path d="' + line + '" fill="none" stroke="var(--accent)" stroke-width="2"'
+      + ' stroke-linecap="round" stroke-linejoin="round"/>'
+      + '<circle cx="' + last[0].toFixed(1) + '" cy="' + last[1].toFixed(1) + '" r="2.6"'
+      + ' fill="var(--accent-2)"/></svg>';
+  }
+  function sparkNode(vals) {
+    return el('span', { class: 'spark-wrap', html: spark(vals) });
+  }
+
+  /* Fill percent (0..100) for a money tile's gradient meter, clamped, guarding a zero or missing
+     denominator. Kept pure and separate from the DOM so the render test can exercise the clamp. */
+  function meterPct(num, den) {
+    num = Number(num); den = Number(den);
+    if (!isFinite(num) || !isFinite(den) || den <= 0) return 0;
+    var p = num / den * 100;
+    return p < 0 ? 0 : (p > 100 ? 100 : p);
+  }
+  function meterNode(num, den) {
+    return el('div', { class: 'meter' }, [
+      el('i', { style: 'width:' + meterPct(num, den).toFixed(1) + '%' })
+    ]);
+  }
+
   function dashboardView(root) {
     root.appendChild(el('div', { class: 'page-head' }, [
       /* No page-sub. The cards below say what this page is; a sentence restating it only
@@ -4404,13 +4455,23 @@
           var cur = moneyCur;
           /* `badge` names which delta from /api/unseen lands on this tile. Reports has none: it
              counts submissions, and no award moves that figure. */
+          /* `meter` is [numerator, denominator] for the tile's gradient bar - the SAME real ratio
+             the tile already states in words, never a fabricated one:
+               Total bounty / Awards  fraction of reports that carry an award (awards / reports)
+               My share               the reporter's cut of the confirmed total (my_share / total)
+               Reports                still-open share of every report (open / reports)
+             meterPct() clamps and guards a zero/missing denominator, so an un-synced checkout
+             renders an empty track rather than a NaN width. */
           var awardTiles = [
             { k: 'Total bounty', v: fmtMoney(money.total, cur), badge: 'total',
+              meter: [money.awards, money.reports],
               sub: money.awards + ' of ' + money.reports + ' reports carry an award' },
             { k: 'My share', v: fmtMoney(money.my_share, cur), badge: 'mine',
+              meter: [money.my_share, money.total],
               sub: money.splits ? (money.splits + ' payout split' + (money.splits === 1 ? '' : 's'))
                                 : 'no payout splits' },
             { k: 'Awards', v: String(money.awards), badge: 'awards',
+              meter: [money.awards, money.reports],
               sub: 'bounties awarded by the program' },
             /* The value reads "34 / 150" rather than the bare total, because on a card about
                earnings the live question is how much is still outstanding. The open count leads
@@ -4418,6 +4479,7 @@
                `open` is optional - an older server that does not send it degrades to the plain
                total rather than rendering "undefined / 150". */
             { k: 'Reports',
+              meter: [money.open, money.reports],
               v: money.open === undefined || money.open === null
                 ? String(money.reports)
                 : [el('span', { class: 'mt-open', text: String(money.open) }),
@@ -4450,14 +4512,15 @@
                 moneyHosts[t.badge] = el('span', { class: 'tile-badges' });
                 kRow.appendChild(moneyHosts[t.badge]);
               }
+              /* The gradient meter sits under the number/label, above the sub, matching the
+                 mockup's rhythm. Its width is the tile's own real ratio (see awardTiles.meter). */
+              var mtKids = [value, kRow];
+              if (t.meter) mtKids.push(meterNode(t.meter[0], t.meter[1]));
+              mtKids.push(el('span', { class: 'mt-s', text: t.sub }));
               /* program=all so the list matches the number that was just clicked: the tile counts
                  every program, while the Tracker itself defaults to the primary one. */
               return el('a', { class: 'moneytile',
-                               href: '#/reports?' + qsFrom({ program: ALL_PROGRAMS }) }, [
-                value,
-                kRow,
-                el('span', { class: 'mt-s', text: t.sub })
-              ]);
+                               href: '#/reports?' + qsFrom({ program: ALL_PROGRAMS }) }, mtKids);
             }))
           ]);
           moneyCard = card;
@@ -4502,24 +4565,34 @@
             }
           }
 
+          /* Section eyebrow, matching the mockup's BOUNTY / OVERVIEW / BREAKDOWN rhythm. Appended
+             just before its section so the label leads it in source order (desktop). Hidden on the
+             phone, where the .dash-host reorder swaps Bounty and Overview and a fixed label would
+             read against the wrong section. */
+          host.appendChild(el('div', { class: 'dash-eyebrow', text: 'Bounty' }));
           host.appendChild(card);
         }
 
         /* 2. counts */
+        /* `spark` names this tile's series in s.sparklines (server-computed cumulative counts).
+           Absent on an old server => no sparkline, never a broken tile. Targets reads the SCOPES
+           series because the tile counts scopes, not the local targets table (see below). */
+        var sparks = s.sparklines || {};
         var tiles = [
-          { k: 'Leads', n: counts.leads, href: '#/leads', watch: 'leads' },
-          { k: 'Reports', n: counts.reports, href: '#/reports', watch: 'reports' },
-          { k: 'Advisories', n: counts.advisories, href: '#/advisories', watch: 'advisories' },
-          { k: 'Programs', n: counts.programs, href: '#/programs' },
+          { k: 'Leads', n: counts.leads, href: '#/leads', watch: 'leads', spark: 'leads' },
+          { k: 'Reports', n: counts.reports, href: '#/reports', watch: 'reports', spark: 'reports' },
+          { k: 'Advisories', n: counts.advisories, href: '#/advisories', watch: 'advisories',
+            spark: 'advisories' },
+          { k: 'Programs', n: counts.programs, href: '#/programs', spark: 'programs' },
           /* counts.scopes, not counts.targets: the tab lists the 970 HackerOne assets, while
              `targets` is the 3 local workspace directories. A tile that disagrees with the page
              it opens is worse than no tile. */
-          { k: 'Targets', n: counts.scopes, href: '#/targets' },
+          { k: 'Targets', n: counts.scopes, href: '#/targets', spark: 'scopes' },
           /* Replaced the Uploads tile: an upload count says nothing about the state of a hunt,
              where the size of the payload arsenal is a live figure worth seeing. A zero here
              means the arsenal has never been synced (scripts/sync-payloads.sh), which is
              exactly when you want to notice. Uploads are still counted on the Status page. */
-          { k: 'Payloads', n: counts.payloads, href: '#/payloads' }
+          { k: 'Payloads', n: counts.payloads, href: '#/payloads', spark: 'payloads' }
         ];
         /* Badges hang in their own span rather than being appended straight to the label row,
            because the tiles are repainted on a timer now: without a host to clear, every refresh
@@ -4531,12 +4604,19 @@
             badgeHosts[t.watch] = el('span', { class: 'tile-badges' });
             kRow.appendChild(badgeHosts[t.watch]);
           }
-          return el('a', { class: 'card tile', href: t.href }, [
+          var tileKids = [
             el('span', { class: 'n', text: String(t.n === undefined || t.n === null ? '—' : t.n) }),
             kRow
-          ]);
+          ];
+          /* Sparkline last, under the number and label, matching the mockup. Only when the server
+             sent a series for it - and it never displaces the .n, .k or .tile-badges host, so the
+             badge repaint (which walks badgeHosts[e].parentNode.parentNode to the tile) is intact. */
+          var sv = sparks[t.spark];
+          if (sv && sv.length) tileKids.push(sparkNode(sv));
+          return el('a', { class: 'card tile', href: t.href }, tileKids);
         }));
 
+        host.appendChild(el('div', { class: 'dash-eyebrow', text: 'Overview' }));
         host.appendChild(tilesEl);
 
         /* Badge the tiles the user asked to be alerted on. Counts come from the server, the
@@ -4661,6 +4741,7 @@
            taller as cards are added, which is why a fifth card does not strand one card alone on
            a row the way a quadrant did. Hacktivity sits at the top of its column at its natural
            height rather than stretching to match. */
+        host.appendChild(el('div', { class: 'dash-eyebrow', text: 'Breakdown' }));
         host.appendChild(el('div', { class: 'dash-split' }, [
           el('div', { class: 'dash-col' }, [
             /* Reports first, leads under them. A report is a result and a lead is work in

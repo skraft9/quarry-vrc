@@ -8,6 +8,8 @@ Run:  python3 server.py            (reads config.json)
 See docs/app/ARCHITECTURE.md for the full stack description.
 """
 import argparse
+import bisect
+import datetime
 import getpass
 import html
 import io
@@ -208,6 +210,11 @@ def r_stats(ctx, m):
         "reports_by_state": group(
             "SELECT state, COUNT(*) FROM reports WHERE source='hackerone' GROUP BY state"),
         "counts": counts,
+        # Per-overview-entity cumulative-count series, so each dashboard tile can draw a sparkline
+        # of how its figure GREW to the count above. READ-ONLY: SELECTs of a timestamp column and
+        # a COUNT, nothing else - no bounty/money column is read or written here. Each series ends
+        # on the same number its tile prints (see _overview_sparklines).
+        "sparklines": _overview_sparklines(c, counts),
         # The client seeds its "new" watermark from this. Without it the dashboard fell back to
         # the browser clock, which runs on a different machine and in a different format from
         # the indexed_at values the watermark is compared against.
@@ -261,6 +268,109 @@ def _bounty_stats(c):
         "open": one("SELECT COUNT(*) " + base + " AND state IN (%s)"
                     % ",".join("'%s' " % st for st in OPEN_REPORT_STATES)),
     }
+
+
+# ---------------------------------------------------------------- dashboard sparklines
+# A tiny cumulative-count series per overview entity, drawn as a sparkline under each dashboard
+# tile. Everything here is READ-ONLY: a SELECT of one timestamp column and a COUNT. No bounty or
+# money column is ever read or written, so the money invariant is untouched. Each series is built
+# from the timestamp the entity already carries and is pinned to END on the entity's live count,
+# so the last point of the line agrees with the number printed on the tile.
+SPARK_POINTS = 12
+
+
+def _spark_epoch(v):
+    """Best-effort epoch (float seconds) for a timestamp cell, or None.
+
+    Cells are either ISO-ish strings ('YYYY-MM-DDTHH:MM:SS', optionally with a trailing Z or an
+    offset, or a bare 'YYYY-MM-DD') or epoch floats (a filesystem mtime). The value is only used
+    to ORDER and BUCKET rows, so the exact zone does not matter - a consistent parse does.
+    """
+    if v is None:
+        return None
+    if isinstance(v, (int, float)):
+        return float(v)
+    s = str(v).strip()
+    if not s:
+        return None
+    # A bare epoch stored as text (mtime): digits with an optional single dot, no date punctuation.
+    if s.replace(".", "", 1).isdigit():
+        try:
+            return float(s)
+        except ValueError:
+            return None
+    s = s.replace(" ", "T")
+    core = s[:19] if len(s) >= 19 and s[10:11] == "T" else s[:10]
+    for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d"):
+        try:
+            return datetime.datetime.strptime(core, fmt).timestamp()
+        except ValueError:
+            continue
+    return None
+
+
+def _cumulative_series(stamps, total, points=SPARK_POINTS):
+    """A non-decreasing series of length `points`, ending EXACTLY at `total`.
+
+    `stamps` is the timestamp of each in-scope row. Rows whose timestamp is missing or unparseable
+    are folded into a constant baseline (treated as having existed from the start) so the line
+    still ends at `total`. When no row carries a usable timestamp - or every row shares one - the
+    series degrades to a smooth monotone ramp up to `total`, so the tile renders a rising line
+    rather than a flat one.
+    """
+    total = int(total or 0)
+    if points < 1:
+        points = 1
+    eps = sorted(e for e in (_spark_epoch(s) for s in stamps) if e is not None)
+    if len(eps) < 2 or eps[0] == eps[-1]:
+        if total <= 0:
+            return [0] * points
+        return [int(round(total * (i + 1) / points)) for i in range(points)]
+    lo, hi = eps[0], eps[-1]
+    span = (hi - lo) or 1.0
+    baseline = max(0, total - len(eps))
+    out = []
+    for i in range(points):
+        edge = lo + span * (i + 1) / points
+        out.append(baseline + bisect.bisect_right(eps, edge))
+    out[-1] = total  # pin the final point to the live count the tile prints
+    return out
+
+
+def _overview_sparklines(c, counts):
+    """{entity: [cumulative counts]} for the six dashboard overview tiles. Read-only, and every
+    query is wrapped so a missing table (a fresh or payload-only checkout) yields an empty series
+    that still renders as a flat baseline rather than taking the whole stats endpoint down."""
+    def stamps(sql):
+        try:
+            return [row[0] for row in c.execute(sql).fetchall()]
+        except Exception:
+            return []
+    out = {}
+    # Leads / reports / advisories reuse the SAME scope fragment as their tile count (entity_scope),
+    # so the series ends on the exact number the tile prints.
+    out["reports"] = _cumulative_series(
+        stamps("SELECT COALESCE(submitted_on, first_seen_at, indexed_at) FROM reports l WHERE "
+               + entity_scope("reports")),
+        counts.get("reports", 0))
+    out["leads"] = _cumulative_series(
+        stamps("SELECT COALESCE(indexed_at, mtime) FROM leads l WHERE " + entity_scope("leads")),
+        counts.get("leads", 0))
+    out["advisories"] = _cumulative_series(
+        stamps("SELECT COALESCE(published, first_seen_at, indexed_at) FROM advisories l WHERE "
+               + entity_scope("advisories")),
+        counts.get("advisories", 0))
+    out["programs"] = _cumulative_series(
+        stamps("SELECT COALESCE(updated_at, synced_at) FROM programs"),
+        counts.get("programs", 0))
+    # The Targets tile counts SCOPES (see the tiles array in app.js), so its series is over scopes.
+    out["scopes"] = _cumulative_series(
+        stamps("SELECT synced_at FROM scopes"),
+        counts.get("scopes", 0))
+    out["payloads"] = _cumulative_series(
+        stamps("SELECT indexed_at FROM payloads"),
+        counts.get("payloads", 0))
+    return out
 
 
 # ---------------------------------------------------------------- entities
