@@ -1164,10 +1164,10 @@ pre.filetext {
   display: inline-flex; align-items: center; gap: 4px;
   padding: 2px 8px; border-radius: 999px;
   font-size: 11px; font-weight: 700; letter-spacing: .04em;
-  background: linear-gradient(135deg, #37c2a8, #2a9d8f);
-  color: #06231f;
-  border: 1px solid rgba(255, 255, 255, .18);
-  box-shadow: 0 0 0 0 rgba(55, 194, 168, .55);
+  background: var(--accent-bg);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  box-shadow: 0 0 0 0 rgba(125, 108, 255, .5);
   animation: newpulse 2.4s ease-out 3;
   vertical-align: middle;
 }
@@ -1175,9 +1175,9 @@ pre.filetext {
 .newbadge .newbadge-count { font-variant-numeric: tabular-nums; }
 
 @keyframes newpulse {
-  0%   { box-shadow: 0 0 0 0 rgba(55, 194, 168, .55); }
-  70%  { box-shadow: 0 0 0 7px rgba(55, 194, 168, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(55, 194, 168, 0); }
+  0%   { box-shadow: 0 0 0 0 rgba(125, 108, 255, .5); }
+  70%  { box-shadow: 0 0 0 7px rgba(125, 108, 255, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(125, 108, 255, 0); }
 }
 
 /* Marked read: fade and collapse out, then removed from the DOM by JS. */
@@ -1200,19 +1200,19 @@ pre.filetext {
 .tile-badges { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 
 /* ------------------------------------------------- UPDATED badge (HackerOne moved a report)
-   Amber, against the teal of NEW. The distinction carries meaning and is not decoration: teal
-   is work you added, amber is the program acting on work you already filed. Deliberately the
-   warmer and more arresting of the two, because a triage or an award wants reading today. */
+   Apple orange, against the violet of NEW. The distinction carries meaning and is not decoration:
+   violet is work you added, orange is the program acting on work you already filed. Deliberately
+   the warmer and more arresting of the two, because a triage or an award wants reading today. */
 .updbadge {
   /* Smaller than the NEW badge it sits beside. Two full-size pills on one tile compete with the
      number they are annotating, which is the thing actually being read. */
   display: inline-flex; align-items: center; gap: 3px;
   padding: 1px 6px; border-radius: 999px;
   font-size: 9.5px; font-weight: 700; letter-spacing: .03em;
-  background: linear-gradient(135deg, #f0b23c, #d98829);
-  color: #2b1a00;
-  border: 1px solid rgba(255, 255, 255, .18);
-  box-shadow: 0 0 0 0 rgba(240, 178, 60, .55);
+  background: var(--warn-bg);
+  color: var(--warn);
+  border: 1px solid var(--warn);
+  box-shadow: 0 0 0 0 rgba(255, 159, 10, .5);
   animation: updpulse 2.4s ease-out 3;
   vertical-align: middle;
   cursor: help;
@@ -1221,9 +1221,9 @@ pre.filetext {
 .updbadge .updbadge-count { font-variant-numeric: tabular-nums; }
 
 @keyframes updpulse {
-  0%   { box-shadow: 0 0 0 0 rgba(240, 178, 60, .55); }
-  70%  { box-shadow: 0 0 0 7px rgba(240, 178, 60, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(240, 178, 60, 0); }
+  0%   { box-shadow: 0 0 0 0 rgba(255, 159, 10, .5); }
+  70%  { box-shadow: 0 0 0 7px rgba(255, 159, 10, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 159, 10, 0); }
 }
 
 .updbadge.fading {
@@ -1896,7 +1896,7 @@ a.matchbadge:hover { text-decoration: none; filter: brightness(1.08); }
 /* Teal for arrival, amber for change - the same two meanings the tile badges carry, so the
    vocabulary is learned once. */
 .rowtag-new { background: var(--accent-bg); color: var(--accent); }
-.rowtag-updated { background: rgba(240, 178, 60, .16); color: var(--warn, #d9a441); }
+.rowtag-updated { background: var(--warn-bg); color: var(--warn); }
 
 
 /* --------------------------------------------------------------- redact mode
