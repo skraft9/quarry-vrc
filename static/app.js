@@ -3031,11 +3031,10 @@
     var isNew = ctx.id === 'new';
     var head = el('div', { class: 'page-head' }, [
       el('div', {}, [
-        el('h1', { class: 'page-title', text: cfg.label }),
-        /* Each entity says something true about ITSELF. The old blanket line claimed every
-           list was "indexed from markdown files, the files remain the source of truth", which
-           stopped being true when reports moved to the HackerOne API. */
-        cfg.sub ? el('p', { class: 'page-sub', text: cfg.sub }) : null
+        el('h1', { class: 'page-title', text: cfg.label })
+        /* Per-tab description subtitles were removed: the title stands on its own and the cards
+           below say what each page is. `cfg.sub` is still accepted by the view config but no
+           longer rendered, so nothing downstream breaks. */
       ]),
       el('div', { class: 'page-actions' }, [
         /* MOBILE FILTER TOGGLE. Hidden on desktop by CSS, where the card is already visible and a
@@ -4739,8 +4738,7 @@
 
     root.appendChild(el('div', { class: 'page-head' }, [
       el('div', {}, [
-        el('h1', { class: 'page-title', text: 'Files' }),
-        el('p', { class: 'page-sub', text: 'Raw filesystem browser over the configured browse roots. Denied paths are shown, not hidden.' })
+        el('h1', { class: 'page-title', text: 'Files' })
       ]),
     ]));
 
@@ -4960,8 +4958,7 @@
 
     root.appendChild(el('div', { class: 'page-head' }, [
       el('div', {}, [
-        el('h1', { class: 'page-title', text: 'Search' }),
-        el('p', { class: 'page-sub', text: 'Full-text across leads, reports, advisories and programs.' })
+        el('h1', { class: 'page-title', text: 'Search' })
       ])
     ]));
 
@@ -5074,8 +5071,7 @@
 
     root.appendChild(el('div', { class: 'page-head' }, [
       el('div', {}, [
-        el('h1', { class: 'page-title', text: 'Payloads' }),
-        el('p', { class: 'page-sub', text: 'Attack payloads from the local PayloadsAllTheThings clone, one row per documented block.' })
+        el('h1', { class: 'page-title', text: 'Payloads' })
       ])
     ]));
 
@@ -5170,8 +5166,7 @@
   function tokensView(root) {
     root.appendChild(el('div', { class: 'page-head' }, [
       el('div', {}, [
-        el('h1', { class: 'page-title', text: 'API tokens' }),
-        el('p', { class: 'page-sub', text: 'Bearer tokens for non-browser clients. Only the hash is stored server-side.' })
+        el('h1', { class: 'page-title', text: 'API tokens' })
       ])
     ]));
 
@@ -5496,9 +5491,7 @@
   function settingsView(root) {
     root.appendChild(el('div', { class: 'page-head' }, [
       el('div', {}, [
-        el('h1', { class: 'page-title', text: 'Settings' }),
-        el('p', { class: 'page-sub',
-                  text: 'Job cadence and session behaviour. Status reports; this page changes.' })
+        el('h1', { class: 'page-title', text: 'Settings' })
       ])
     ]));
 
@@ -5628,9 +5621,7 @@
   function statusView(root) {
     root.appendChild(el('div', { class: 'page-head' }, [
       el('div', {}, [
-        el('h1', { class: 'page-title', text: 'Status' }),
-        el('p', { class: 'page-sub',
-                  text: 'Integration health, scheduled jobs, and what the index currently holds.' })
+        el('h1', { class: 'page-title', text: 'Status' })
       ])
     ]));
 
@@ -5831,11 +5822,7 @@
     }
 
     root.appendChild(el('div', { class: 'page-head' }, el('div', {}, [
-      el('h1', { class: 'page-title', text: 'Targets' }),
-      el('p', {
-        class: 'page-sub',
-        text: 'In-scope assets from HackerOne, and the local workspaces leads are filed against.'
-      })
+      el('h1', { class: 'page-title', text: 'Targets' })
     ])));
 
     var filters = el('div', { class: 'filters card' });
@@ -6087,11 +6074,7 @@
   function certificatesView(root) {
     root.appendChild(el('div', { class: 'page-head' }, [
       el('div', {}, [
-        el('h1', { class: 'page-title', text: 'Certificates' }),
-        el('p', {
-          class: 'page-sub',
-          text: 'Trust this server in your browser so the TLS warning goes away.'
-        })
+        el('h1', { class: 'page-title', text: 'Certificates' })
       ])
     ]));
 
@@ -6659,9 +6642,7 @@
   function auditView(root) {
     root.appendChild(el('div', { class: 'page-head' }, [
       el('div', {}, [
-        el('h1', { class: 'page-title', text: 'Audit log' }),
-        el('p', { class: 'page-sub',
-                  text: 'What this system did, what its jobs are doing, and what changed upstream.' })
+        el('h1', { class: 'page-title', text: 'Audit log' })
       ])
     ]));
 
@@ -7206,9 +7187,7 @@
   function integrationsView(root) {
     root.appendChild(el('div', { class: 'page-head' }, [
       el('div', {}, [
-        el('h1', { class: 'page-title', text: 'Integrations' }),
-        el('p', { class: 'page-sub',
-                  text: 'Outbound credentials and the syncs that use them. Secrets are write-only.' })
+        el('h1', { class: 'page-title', text: 'Integrations' })
       ])
     ]));
 
