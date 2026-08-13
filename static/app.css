@@ -5,7 +5,7 @@
 /* ------------------------------------------------------------------ theme */
 :root {
   --bg:        #f5f5f7;
-  --bg-grad:   radial-gradient(1100px 560px at 84% -14%, rgba(91,63,214,.06), transparent 58%), radial-gradient(820px 480px at -6% 108%, rgba(90,130,255,.05), transparent 55%), var(--bg);
+  --bg-grad:   radial-gradient(1250px 680px at 82% -16%, #e7e2fb 0%, transparent 60%), radial-gradient(980px 600px at -8% 112%, #e3ecf8 0%, transparent 56%), var(--bg);
   --bg-sunk:   #eaeaec;
   --panel:     #ffffff;
   --panel-2:   #fbfbfd;
@@ -88,7 +88,7 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg:        #0b0c10;
-    --bg-grad:   radial-gradient(1100px 560px at 84% -14%, rgba(125,108,255,.09), transparent 58%), radial-gradient(820px 480px at -6% 108%, rgba(90,130,255,.055), transparent 55%), var(--bg);
+    --bg-grad:   radial-gradient(1250px 680px at 82% -16%, #191733 0%, transparent 60%), radial-gradient(980px 600px at -8% 112%, #0f2030 0%, transparent 56%), var(--bg);
     --bg-sunk:   #08090c;
     --panel:     #16181f;
     --panel-2:   #1b1e27;
@@ -142,7 +142,7 @@
 
 :root[data-theme="dark"] {
   --bg:        #0b0c10;
-  --bg-grad:   radial-gradient(1100px 560px at 84% -14%, rgba(125,108,255,.09), transparent 58%), radial-gradient(820px 480px at -6% 108%, rgba(90,130,255,.055), transparent 55%), var(--bg);
+  --bg-grad:   radial-gradient(1250px 680px at 82% -16%, #191733 0%, transparent 60%), radial-gradient(980px 600px at -8% 112%, #0f2030 0%, transparent 56%), var(--bg);
   --bg-sunk:   #08090c;
   --panel:     #16181f;
   --panel-2:   #1b1e27;
