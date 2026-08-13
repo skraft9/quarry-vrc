@@ -49,8 +49,10 @@ Quarry syncs and submits through the HackerOne API. Other platforms are not supp
 - **Find it, draft it, submit it.** File a finished report using the HackerOne API, then watch
   its state and bounty flow straight back into the Tracker.
 - **A researcher's arsenal, built in.** Full-text search across every lead, report and payload, a
-  payload library cloned from PayloadsAllTheThings, and live CVE/CVSS advisory feeds cross-referenced
-  against your work.
+  payload library cloned from PayloadsAllTheThings, proxy and OS evidence capture wired to Caido and
+  Burp, and live CVE/CVSS advisory feeds cross-referenced against your work.
+- **Team up on a finding.** Accept private program invitations and report collaborations, invite a
+  collaborator and set the bounty split, straight from the console.
 - **Native to agentic AI.** Every lead, note and payload is plain Markdown on disk, so Claude Code,
   Cursor or your own agent can read, query and draft your research right alongside you.
 
@@ -163,7 +165,7 @@ container can health-check itself; neither is a language dependency.)
 | **Payloads** | Searches a payload library (one row per documented block), cloned from a public reference and yours to extend. |
 | **Files** | Browses the configured roots with an edit-and-save-back pane; denied paths are shown, not hidden. |
 | **Certificates** | How to trust the container's TLS cert. Reached from the seal icon beside the version in the sidebar footer. |
-| **Integrations** / **Tokens** | Store your HackerOne credentials write-only; issue Bearer tokens for non-browser clients. |
+| **Integrations** / **Tokens** | Store your HackerOne credentials write-only; accept program invitations and manage report collaborations and bounty splits; issue Bearer tokens for non-browser clients. |
 | **Audit log** / **Status** / **Settings** | Record what happened, report health and the index, and change job cadence. |
 
 ### <img src="docs/img/gem-amber.svg" width="16" align="top" alt=""> Built for Agentic AI
@@ -194,9 +196,12 @@ copy you keep in step by hand.
 
 - **Sync** pulls your programs, scopes, reports, states, bounties, payout splits and triage threads.
 - **Submit** files a finished report to a program straight from the app, with no copy-paste into the
-  web form.
+  web form; add `--attach` to upload evidence captured from Caido, Burp or the OS with it.
 - **Read the triage** fetches the analyst's actual comment on a closed report, where the reopen
   condition usually lives.
+- **Invitations and collaborations** accept private program invites and manage report collaborations
+  and bounty splits, over HackerOne's GraphQL API with a browser session cookie stored write-only,
+  distinct from the REST API token.
 
 Your API username and token are pasted once in **Integrations**, verified against the live API before
 they are stored, kept server-side, and never rendered back into the page.

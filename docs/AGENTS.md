@@ -115,10 +115,55 @@ python3 h1.py --submit reports/<slug>.md --program <handle> \
   --weakness cwe-284 --scope "<in-scope asset>" --severity medium
 ```
 
-`--severity` is required by most programs (a missing rating is a 422). After submission the report
-appears in the **Tracker**, synced from HackerOne, with its state, bounty and triage thread. Read the
-triager's actual comment on a closed report - it usually names the condition under which the finding
-would have been accepted - before deciding a class is dead.
+`--severity` is required by most programs (a missing rating is a 422). Add `--attach` to upload the
+evidence captured for the target with the report (see [Capturing evidence](#capturing-evidence-for-a-report)).
+After submission the report appears in the **Tracker**, synced from HackerOne, with its state, bounty
+and triage thread. Read the triager's actual comment on a closed report - it usually names the
+condition under which the finding would have been accepted - before deciding a class is dead.
+
+## Capturing evidence for a report
+
+Evidence lives in the target's `evidence/` directory and is never indexed as a lead.
+`core/screenshot.py` captures it from a proxy or the OS and turns it into report-ready material:
+
+```bash
+# list which backends are reachable (Caido, Burp, OS)
+python3 screenshot.py --detect
+
+# capture: an OS screenshot, or pull a specific proxy request
+python3 screenshot.py --capture --target <slug> --name login-idor
+python3 screenshot.py --caido --request-id 42 --target <slug>
+
+# pull recent proxy traffic filtered to the target's in-scope hosts, filing each match
+python3 screenshot.py --feed --target <slug> --limit 20
+
+# build a chronological timeline ready to paste into Steps To Reproduce
+python3 screenshot.py --timeline --target <slug> --ref F01
+
+# list everything gathered for the target (the set --attach uploads)
+python3 screenshot.py --collect --target <slug>
+```
+
+Attach it on submission by adding `--attach` to the `h1.py --submit` command above. Inside the
+container the Caido/Burp defaults (`127.0.0.1:8080` / `127.0.0.1:1337`) resolve to the container, not
+the host, so set `CAIDO_URL` / `BURP_URL` to `http://host.docker.internal:<port>` to reach a proxy
+running on the operator's machine.
+
+## Program invitations and collaborations
+
+These operations live on HackerOne's GraphQL API, which authenticates with a browser session cookie
+(the `__Host-session` value), distinct from the REST API token and stored write-only. The human
+pastes it once in the **Invitations and Collaborations** card in **Integrations**; then
+`core/h1_graphql.py` lists and acts on invites, collaborations and splits:
+
+```bash
+python3 h1_graphql.py --invitations                 # list pending program invitations
+python3 h1_graphql.py --accept-invite TOKEN         # accept one (or --reject-invite TOKEN)
+python3 h1_graphql.py --collabs                     # list collaboration invitations
+python3 h1_graphql.py --accept-collab TOKEN         # accept a collaboration
+python3 h1_graphql.py --add-collab REPORT_ID USER   # invite a collaborator to a report you own
+python3 h1_graphql.py --set-split REPORT_ID USER 50 # set that collaborator's bounty split to 50%
+```
 
 ## A good agent loop
 
