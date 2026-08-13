@@ -328,11 +328,19 @@ def _cumulative_series(stamps, total, points=SPARK_POINTS):
         return [int(round(total * (i + 1) / points)) for i in range(points)]
     lo, hi = eps[0], eps[-1]
     span = (hi - lo) or 1.0
-    baseline = max(0, total - len(eps))
+    n = len(eps)
+    baseline = max(0, total - n)
     out = []
     for i in range(points):
         edge = lo + span * (i + 1) / points
-        out.append(baseline + bisect.bisect_right(eps, edge))
+        # Soften the SIGNAL above the undated-row baseline toward an even ramp, so a
+        # batch-import burst relaxes into a full-width rise instead of a flat line with
+        # a tail spike (the "hockey stick" the mockup never has). Blending only the
+        # above-baseline signal keeps the baseline a floor: undated rows still hold the
+        # line up from point zero, both terms stay non-decreasing, and it ends at total.
+        timed = bisect.bisect_right(eps, edge)
+        ramp = n * (i + 1) / points
+        out.append(int(round(baseline + 0.5 * timed + 0.5 * ramp)))
     out[-1] = total  # pin the final point to the live count the tile prints
     return out
 

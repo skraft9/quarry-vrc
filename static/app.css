@@ -76,9 +76,18 @@
   --h1-not-applicable-bg:       #f7e5e5;
   --h1-spam-bg:                 #f6f7f8;
   --shadow:    inset 0 1px 0 rgba(255,255,255,.7), 0 1px 2px rgba(16,24,40,.06), 0 12px 30px rgba(16,24,40,.10);
+  /* A lighter single-layer lift for interactive atoms (buttons, inputs, rows, tiles) on hover,
+     where the full --shadow would read as a floating card rather than a raised control. */
+  --shadow-sm: 0 1px 2px rgba(16,24,40,.05), 0 4px 12px rgba(16,24,40,.07);
   --focus:     #5b3fd6;
   --radius:    14px;
   --radius-sm: 9px;
+  /* Micro radius for inline chips / tags / badges: rounded without going full pill. Not themed,
+     so it lives on :root only. */
+  --radius-xs: 6px;
+  /* One easing curve for every hover / active / focus transition in the app, so motion reads as
+     one system. Matches the cubic-bezier the collapsible rail already animates on. */
+  --ease: cubic-bezier(.4, 0, .2, 1);
   --topbar-h:  52px;
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
   --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -135,6 +144,7 @@
     --h1-not-applicable-bg:       #301d20;
     --h1-spam-bg:                 #191e25;
     --shadow:    inset 0 1px 0 rgba(255,255,255,.055), 0 1px 2px rgba(0,0,0,.35), 0 14px 34px rgba(0,0,0,.42);
+    --shadow-sm: 0 1px 2px rgba(0,0,0,.32), 0 4px 14px rgba(0,0,0,.38);
     --focus:     #7d6cff;
     color-scheme: dark;
   }
@@ -192,6 +202,7 @@
   --h1-not-applicable-bg:       #301d20;
   --h1-spam-bg:                 #191e25;
   --shadow:    inset 0 1px 0 rgba(255,255,255,.055), 0 1px 2px rgba(0,0,0,.35), 0 14px 34px rgba(0,0,0,.42);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.32), 0 4px 14px rgba(0,0,0,.38);
   --focus:     #7d6cff;
   color-scheme: dark;
 }
@@ -217,18 +228,25 @@ html, body {
 }
 
 body {
-  background: var(--bg-grad, var(--bg));
-  background-attachment: fixed;
+  /* FLAT, to match the dashboard mockup. The bold two-radial --bg-grad made the live app read
+     as a different surface than the flat mockup; the frosted topbar/sidebar still blur the solid
+     ground and whatever scrolls behind them, so the chrome keeps its depth. */
+  background: var(--bg);
   min-height: 100vh;
   color: var(--text);
   font-family: var(--sans);
   font-size: 14px;
   line-height: 1.5;
   -webkit-text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-a { color: var(--accent); text-decoration: none; }
+a { color: var(--accent); text-decoration: none; transition: color 140ms var(--ease); }
 a:hover { text-decoration: underline; }
+
+/* Themed selection, so highlighted text carries the accent rather than the browser default. */
+::selection { background: var(--accent-bg); color: var(--text); }
 
 code, pre, .mono { font-family: var(--mono); }
 
@@ -297,13 +315,35 @@ code, pre, .mono { font-family: var(--mono); }
 
 .globalsearch { flex: 1; display: flex; gap: 6px; min-width: 0; max-width: 560px; margin: 0 auto; }
 .globalsearch input { flex: 1; min-width: 0; }
+/* Search field with an inline magnifier and a "/" keycap, ported from the mockup. */
+.gs-field { position: relative; flex: 1; min-width: 0; display: flex; align-items: center; }
+.gs-field input { width: 100%; min-width: 0; padding-left: 32px; padding-right: 30px; }
+.gs-ic { position: absolute; left: 10px; width: 15px; height: 15px; color: var(--text-mute); display: inline-flex; pointer-events: none; }
+.gs-ic svg { width: 100%; height: 100%; display: block; }
+.gs-key {
+  position: absolute; right: 8px; border: 1px solid var(--line); border-radius: 6px;
+  padding: 0 6px; font-size: 11px; line-height: 16px; color: var(--text-mute);
+  font-family: var(--mono); pointer-events: none;
+}
+/* Desktop submits on Enter and shows only the keycap; the button stays for the phone layout. */
+@media (min-width: 768px) { .gs-submit { display: none; } }
 
 .topbar-right { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 .userchip {
   font-size: 12px; color: var(--text-dim);
   padding: 3px 9px; border: 1px solid var(--line); border-radius: 999px;
   white-space: nowrap; max-width: 220px; overflow: hidden; text-overflow: ellipsis;
+  transition: background-color 140ms var(--ease), border-color 140ms var(--ease), color 140ms var(--ease);
 }
+.userchip:hover { border-color: var(--text-mute); color: var(--text); }
+/* Theme + Log out as pill chips, matching the mockup's topbar (and the userchip beside them). */
+.topchip {
+  font-size: 12px; color: var(--text-dim); cursor: pointer; white-space: nowrap;
+  padding: 4px 11px; border: 1px solid var(--line); border-radius: 999px; background: transparent;
+  transition: background-color 140ms var(--ease), border-color 140ms var(--ease), color 140ms var(--ease);
+}
+.topchip:hover { border-color: var(--text-mute); color: var(--text); background: var(--panel-2); }
+.topchip:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 .shell {
   flex: 1;
@@ -424,6 +464,7 @@ code, pre, .mono { font-family: var(--mono); }
   padding: 7px 10px; border-radius: var(--radius-sm);
   color: var(--text-dim); font-size: 13.5px; font-weight: 500;
   white-space: nowrap;
+  transition: background-color 140ms var(--ease), color 140ms var(--ease);
 }
 .navlink:hover { background: var(--panel-2); color: var(--text); text-decoration: none; }
 .navlink.active { background: var(--accent-bg); color: var(--accent); font-weight: 600; }
@@ -432,6 +473,12 @@ code, pre, .mono { font-family: var(--mono); }
   color: var(--text-mute); flex: none;
 }
 .navlink.active .navkey { color: var(--accent); }
+/* Rail line icon (expanded view). Follows the link colour and brightens on the active row; the
+   collapsed rail shows the first-letter mark instead, so the icon steps aside there. */
+.navicon { display: inline-flex; width: 16px; height: 16px; flex: none; opacity: .8; }
+.navicon svg { width: 100%; height: 100%; display: block; }
+.navlink.active .navicon { opacity: 1; }
+.shell.nav-collapsed .navicon { display: none; }
 .nav-sep { height: 1px; background: var(--line-soft); margin: 8px 6px; flex: none; }
 .nav-note { padding: 6px 10px; font-size: 11px; color: var(--text-mute); }
 /* Non-clickable section title (ADMIN). Quiet, uppercase, and never a link. Hidden when the rail
@@ -473,7 +520,7 @@ code, pre, .mono { font-family: var(--mono); }
 .nav-cert-glyph { display: inline-flex; }
 .nav-cert-glyph svg { width: 17px; height: 17px; display: block; }
 
-.view { min-width: 0; padding: 16px 18px 60px; }
+.view { min-width: 0; padding: 20px 24px 60px; }
 
 @media (max-width: 900px) {
   .shell { grid-template-columns: minmax(0, 1fr); }
@@ -513,26 +560,43 @@ code, pre, .mono { font-family: var(--mono); }
   color: var(--text);
   cursor: pointer;
   white-space: nowrap;
+  box-shadow: none;
+  transition: background-color 150ms var(--ease), border-color 150ms var(--ease),
+              color 150ms var(--ease), box-shadow 150ms var(--ease), transform 120ms var(--ease);
 }
-.btn:hover { border-color: var(--text-mute); }
-.btn:active { transform: translateY(1px); }
-.btn[disabled] { opacity: .5; cursor: not-allowed; transform: none; }
-.btn-primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
-.btn-primary:hover { background: var(--accent-2); border-color: var(--accent-2); }
-.btn-danger { color: var(--danger); border-color: var(--danger); background: transparent; }
-.btn-danger:hover { background: var(--danger-bg); }
-.btn-quiet { background: transparent; }
+/* Secondary buttons rest flat and lift softly on hover; the surface brightens a step so the
+   affordance is clear without a border-only tell. */
+.btn:hover { border-color: var(--text-mute); background: var(--panel); box-shadow: var(--shadow-sm); }
+.btn:active { transform: translateY(1px); box-shadow: none; }
+.btn[disabled] { opacity: .5; cursor: not-allowed; transform: none; box-shadow: none; }
+/* Primary carries a resting lift so it reads as the page's committed action. */
+.btn-primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); box-shadow: var(--shadow-sm); }
+.btn-primary:hover { background: var(--accent-2); border-color: var(--accent-2); box-shadow: var(--shadow-sm); }
+.btn-danger { color: var(--danger); border-color: var(--danger); background: transparent; box-shadow: none; }
+.btn-danger:hover { background: var(--danger-bg); box-shadow: none; }
+.btn-quiet { background: transparent; box-shadow: none; }
+.btn-quiet:hover { background: var(--panel-2); box-shadow: none; }
 .btn-sm { padding: 3px 8px; font-size: 12px; }
 .btn-block { width: 100%; display: block; margin-top: 6px; }
 
 input[type=text], input[type=search], input[type=password], input[type=number], select, textarea {
   font: inherit; font-size: 13px;
-  padding: 6px 9px;
+  padding: 7px 10px;
   color: var(--text);
   background: var(--panel-2);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   max-width: 100%;
+  transition: border-color 150ms var(--ease), box-shadow 150ms var(--ease), background-color 150ms var(--ease);
+}
+/* Accent focus ring on any editable control - the same violet the rest of the app selects with.
+   outline:none swaps the browser default for the softer ring in both mouse and keyboard focus so
+   the two never double up. */
+input[type=text]:focus, input[type=search]:focus, input[type=password]:focus,
+input[type=number]:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-bg);
 }
 input:disabled, textarea:disabled, select:disabled { opacity: .55; }
 textarea { width: 100%; min-height: 260px; font-family: var(--mono); font-size: 12.5px; line-height: 1.55; resize: vertical; }
@@ -567,6 +631,29 @@ select { cursor: pointer; }
 }
 .empty-title { display: block; color: var(--text-dim); font-weight: 600; margin-bottom: 3px; }
 
+/* ---------------------------------------------------------- interaction motion
+   One shared easing/timing for hover + press across the component library, added as its own rules
+   so each component keeps its colours and only the motion is unified. No layout property is touched
+   here. Card-shaped tiles pick up the same soft lift the buttons use. Turned off wholesale for a
+   reduced-motion preference at the foot of the block (the existing per-component reduced-motion
+   rules stay as they are). */
+a.tile, .moneytile, .result, .add-program-row, .crumbs button, .dropzone, .sortbtn,
+.statechip, .exchip, .cwe-badge, .matchbadge, .nav-cert,
+table.data tbody tr.clickable {
+  transition: background-color 140ms var(--ease), border-color 140ms var(--ease),
+              color 140ms var(--ease), box-shadow 140ms var(--ease);
+}
+a.tile:hover, .moneytile:hover { box-shadow: var(--shadow-sm); }
+
+@media (prefers-reduced-motion: reduce) {
+  a, .btn, .userchip, .navlink, input, select, textarea,
+  a.tile, .moneytile, .result, .add-program-row, .crumbs button, .dropzone, .sortbtn,
+  .statechip, .exchip, .cwe-badge, .matchbadge, .nav-cert,
+  table.data tbody tr.clickable {
+    transition: none;
+  }
+}
+
 /* pills ------------------------------------------------------------------ */
 .pill {
   display: inline-block; padding: 1px 8px; border-radius: 999px;
@@ -584,7 +671,7 @@ select { cursor: pointer; }
 .pill-neutral   { background: var(--panel-2);   color: var(--text-dim); border-color: var(--line); }
 
 .tag {
-  display: inline-block; padding: 0 6px; border-radius: 4px;
+  display: inline-block; padding: 0 6px; border-radius: var(--radius-xs);
   background: var(--panel-2); border: 1px solid var(--line-soft);
   color: var(--text-dim); font-size: 11.5px; font-family: var(--mono);
   white-space: nowrap;
@@ -838,8 +925,8 @@ a.cwe-badge:hover { border-color: var(--accent); color: var(--accent); }
 /* Thin gradient progress meter under a money tile's number. --bg-sunk is the app's track colour
    (same one the breakdown bars use); the fill is the accent gradient, so it themes in both modes. */
 .meter {
-  height: 6px; border-radius: 999px; background: var(--bg-sunk);
-  overflow: hidden; margin: 9px 0 3px;
+  height: 6px; border-radius: 999px; background: var(--line);
+  overflow: hidden; margin: 11px 0 9px;
 }
 .meter > i {
   display: block; height: 100%; border-radius: 999px; min-width: 0;
@@ -890,7 +977,7 @@ a.cwe-badge:hover { border-color: var(--accent); color: var(--accent); }
   .dash-split .ha-rows { max-width: 640px; overflow: visible; }
 }
 .tile { padding: 15px 16px; }
-.tile .n { display: block; font-size: 24px; font-weight: 680; letter-spacing: -.02em; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.tile .n { display: block; font-size: 26px; font-weight: 700; letter-spacing: -.025em; line-height: 1.15; color: var(--text); font-variant-numeric: tabular-nums; }
 .tile .k {
   display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
   font-size: 11.5px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .05em;
@@ -903,21 +990,30 @@ a.tile:hover { border-color: var(--accent); text-decoration: none; }
   font-size: 12px; font-weight: 650; text-transform: uppercase; letter-spacing: .05em; color: var(--text-dim);
 }
 
+/* Breakdown panel head: title on the left, the mockup's quiet running count on the right. */
+.bd-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.bd-head .card-title { margin: 0; }
+.bd-count { font-size: 11px; color: var(--text-mute); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .bars { padding: 12px 14px; display: flex; flex-direction: column; gap: 9px; }
 .barrow { display: grid; grid-template-columns: minmax(60px, 34%) 1fr auto; gap: 9px; align-items: center; font-size: 12.5px; }
-.barrow .bl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-dim); }
-.barrow a.bl { color: var(--accent); }
+.barrow .bl { display: flex; align-items: center; gap: 8px; min-width: 0; color: var(--text); }
+.barrow .bl-t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.barrow a.bl { color: var(--text); }
+.barrow a.bl:hover { color: var(--accent); text-decoration: none; }
+/* Row colour swatch, keyed to the bar. Default accent; the .sw.s-* rules below tint it per status
+   so it always matches the fill beside it (see the mockup's breakdown). */
+.barrow .sw { width: 9px; height: 9px; border-radius: 3px; flex: none; background: var(--accent); }
 .barrow .bt { background: var(--bg-sunk); border-radius: 999px; height: 9px; overflow: hidden; }
 .barrow .bf { height: 100%; border-radius: 999px; background: var(--accent); min-width: 2px; }
 .barrow .bn { font-variant-numeric: tabular-nums; font-weight: 650; min-width: 34px; text-align: right; }
-.bf.s-open { background: var(--warn); }
-.bf.s-confirmed { background: var(--info); }
-.bf.s-ready { background: var(--ready); }
-.bf.s-submitted { background: var(--ok); }
-.bf.s-awarded { background: var(--award); }
-.bf.s-parked { background: var(--text-mute); }
-.bf.s-killed { background: var(--danger); }
-.bf.s-unknown { background: var(--line); }
+.bf.s-open, .sw.s-open { background: var(--warn); }
+.bf.s-confirmed, .sw.s-confirmed { background: var(--info); }
+.bf.s-ready, .sw.s-ready { background: var(--ready); }
+.bf.s-submitted, .sw.s-submitted { background: var(--ok); }
+.bf.s-awarded, .sw.s-awarded { background: var(--award); }
+.bf.s-parked, .sw.s-parked { background: var(--text-mute); }
+.bf.s-killed, .sw.s-killed { background: var(--danger); }
+.bf.s-unknown, .sw.s-unknown { background: var(--line); }
 .barrow.is-open .bl, .barrow.is-open .bn { color: var(--warn); font-weight: 700; }
 
 /* files ------------------------------------------------------------------ */
@@ -1382,14 +1478,14 @@ pre.filetext {
    agreeing with them. The bars have no such neighbour: their card draws nothing but H1 states,
    so matching H1 costs nothing and makes the card readable to anyone who knows the badges.
    One rule per state, no grouping, so the set can be checked against REPORT_STATES. */
-.bf.s-new { background: var(--h1-new); }
-.bf.s-pending-program-review { background: var(--h1-pending-program-review); }
-.bf.s-triaged { background: var(--h1-triaged); }
-.bf.s-resolved { background: var(--h1-resolved); }
-.bf.s-duplicate { background: var(--h1-duplicate); }
-.bf.s-informative { background: var(--h1-informative); }
-.bf.s-not-applicable { background: var(--h1-not-applicable); }
-.bf.s-spam { background: var(--h1-spam); }
+.bf.s-new, .sw.s-new { background: var(--h1-new); }
+.bf.s-pending-program-review, .sw.s-pending-program-review { background: var(--h1-pending-program-review); }
+.bf.s-triaged, .sw.s-triaged { background: var(--h1-triaged); }
+.bf.s-resolved, .sw.s-resolved { background: var(--h1-resolved); }
+.bf.s-duplicate, .sw.s-duplicate { background: var(--h1-duplicate); }
+.bf.s-informative, .sw.s-informative { background: var(--h1-informative); }
+.bf.s-not-applicable, .sw.s-not-applicable { background: var(--h1-not-applicable); }
+.bf.s-spam, .sw.s-spam { background: var(--h1-spam); }
 
 /* A collaborator row is someone else's report - it must not read as one of ours. */
 .pill.role-reporter {
@@ -1514,16 +1610,24 @@ a.statechip:hover { text-decoration: none; border-color: var(--accent); }
 .moneytile {
   display: flex; flex-direction: column; gap: 2px;
   padding: 15px 16px; border: 1px solid var(--line); border-radius: var(--radius);
-  background: var(--panel-2); text-decoration: none; color: inherit;
+  background: var(--panel-2); box-shadow: var(--shadow); text-decoration: none; color: inherit;
 }
 .moneytile:hover { border-color: var(--accent); text-decoration: none; }
-.mt-v { font-size: 22px; font-weight: 680; letter-spacing: -.02em; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.mt-v { font-size: 28px; font-weight: 700; letter-spacing: -.025em; line-height: 1.2; margin: 2px 0 1px; font-variant-numeric: tabular-nums; }
 /* A row, not a bare label: it carries the award badge alongside the label now, and wraps rather
    than pushing the badge out of a narrow tile. */
 .mt-k {
-  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-  font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-dim);
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;
+  font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--text-mute);
 }
+/* The small stat pill on the right of a money tile's label (awards/reports, share %, N total),
+   ported from the mockup's .badge. */
+.mt-pill {
+  font-size: 10.5px; font-weight: 600; letter-spacing: .02em; text-transform: none;
+  color: var(--accent-2); background: var(--accent-bg); border-radius: 999px; padding: 2px 8px;
+}
+/* Delta badges (new / updated / award) get their own row under the number, per the mockup. */
+.mt-badges { margin: 8px 0 1px; }
 .mt-s { font-size: 11.5px; color: var(--text-mute); }
 /* "34 / 150" on the Reports tile. The open count keeps the full weight of the other tile values
    because it is the figure being read; the total is dimmed to a denominator so the pair scans as
@@ -1692,7 +1796,7 @@ a.matchbadge:hover { text-decoration: none; filter: brightness(1.08); }
 /* --- HackerOne conversation thread (reports detail) ------------------------ */
 .thread-panel { margin-top: 14px; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
 .th-title { display: flex; margin: 0; align-items: center; gap: 8px; padding: 8px 12px;
-            background: var(--panel2); border-bottom: 1px solid var(--line);
+            background: var(--panel-2); border-bottom: 1px solid var(--line);
             font-size: 12px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; }
 .th-count { font-weight: 500; opacity: .7; border: 1px solid var(--line);
             border-radius: 10px; padding: 0 7px; font-size: 11px; }
@@ -1995,7 +2099,7 @@ body.redacted .md {
 /* The BAR is H1's yellow while the pill above stays sky blue, and that divergence is deliberate:
    the pill has to sit beside lead pills on the same scale, the bar only ever sits beside other H1
    states. See the --h1-* block for the rest of the set. */
-.bf.s-retesting { background: var(--h1-retesting); }
+.bf.s-retesting, .sw.s-retesting { background: var(--h1-retesting); }
 @media (prefers-color-scheme: light) {
   .pill.st-retesting, .statechip.st-retesting {
     background: #e0f2fe; color: #075985; border-color: #7dd3fc;
@@ -2360,7 +2464,7 @@ body.redacted .md {
      unreachable on a phone: the rail becomes a horizontally scrolling tab strip and the version
      scrolls off the end, so the build was unidentifiable exactly when it gets asked about. */
   .topversion {
-    display: inline-block; font-size: 12px; color: var(--muted);
+    display: inline-block; font-size: 12px; color: var(--text-mute);
     letter-spacing: 0.02em; white-space: nowrap; flex: 0 0 auto;
   }
   /* Only one copy on screen. The rail's is the desktop's and is hidden here rather than left to

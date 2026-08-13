@@ -3475,9 +3475,17 @@
     var pct = max > 0 ? Math.max(2, Math.round((value / max) * 100)) : 0;
     var fill = el('div', { class: 'bf' + (opts.fillClass ? ' ' + opts.fillClass : '') });
     fill.style.width = pct + '%';   /* CSSOM: allowed under style-src 'self' */
+    /* A small colour swatch keys the row to its bar, matching the mockup. It carries the SAME
+       status class as the fill, so swatch and bar always share a colour; with no status class it
+       falls back to the accent, like the fill. The label text lives in its own span so it can
+       ellipsis without clipping the swatch. */
+    var lbl = [
+      el('span', { class: 'sw' + (opts.fillClass ? ' ' + opts.fillClass : ''), 'aria-hidden': 'true' }),
+      el('span', { class: 'bl-t', text: label, title: label })
+    ];
     var labelNode = opts.href
-      ? el('a', { class: 'bl', href: opts.href, text: label, title: label })
-      : el('span', { class: 'bl', text: label, title: label });
+      ? el('a', { class: 'bl', href: opts.href, title: label }, lbl)
+      : el('span', { class: 'bl', title: label }, lbl);
     return el('div', { class: 'barrow' + (opts.rowClass ? ' ' + opts.rowClass : '') }, [
       labelNode,
       el('div', { class: 'bt' }, fill),
@@ -3532,10 +3540,16 @@
     opts = opts || {};
     var keys = breakdownKeys(obj, opts);
 
-    var max = 0;
-    keys.forEach(function (k) { max = Math.max(max, obj[k] || 0); });
+    var max = 0, sum = 0;
+    keys.forEach(function (k) { var v = obj[k] || 0; max = Math.max(max, v); sum += v; });
 
-    var card = el('section', { class: 'card' }, el('div', { class: 'card-title', text: title }));
+    /* Header ports the mockup's panel head: the title, and (when the caller names a unit) a quiet
+       running count of the rows shown, e.g. "109 categorized". */
+    var head = [el('span', { class: 'card-title', text: title })];
+    if (opts.countLabel) {
+      head.push(el('span', { class: 'bd-count', text: sum + ' ' + opts.countLabel }));
+    }
+    var card = el('section', { class: 'card' }, el('div', { class: 'bd-head' }, head));
     if (!keys.length) {
       card.appendChild(empty('No data yet'));
       return card;
@@ -4370,8 +4384,15 @@
       var y = h - 2 - ((v - min) / rng) * (h - 6);
       return [x, y];
     });
+    // Smooth curve instead of hard-elbowed straight segments. The T (smooth-quadratic) shorthand
+    // reflects each control point off the previous one, so the line eases through every anchor as
+    // a gentle spline - yet the `d` string still carries ONLY the anchor coordinates (two numbers
+    // per point), which is what keeps this a real curve without hand-placed control points and
+    // lets the render test read one [x,y] vertex per data point exactly as before. The first T
+    // after the M has an implicit control at the start point, so the leading segment eases in
+    // rather than kinking, and a flat series stays a level line.
     var line = pts.map(function (p, i) {
-      return (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1);
+      return (i ? 'T' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1);
     }).join(' ');
     var area = line + ' L' + w + ' ' + h + ' L0 ' + h + ' Z';
     var gid = 'qspark' + (++sparkSeq);
@@ -4407,14 +4428,12 @@
 
   function dashboardView(root) {
     root.appendChild(el('div', { class: 'page-head' }, [
-      /* No page-sub. The cards below say what this page is; a sentence restating it only
-         pushes the first real figure further down. */
+      /* Title + one-line subtitle, matching the mockup's dashboard head. No action buttons:
+         search lives in the topbar and Status is a nav row, so the head stays clean. */
       el('div', {}, [
-        el('h1', { class: 'page-title', text: 'Dashboard' })
-      ]),
-      el('div', { class: 'page-actions' }, [
-        el('a', { class: 'btn', href: '#/search', text: 'Search' }),
-        el('a', { class: 'btn', href: '#/status', text: 'Status' })
+        el('h1', { class: 'page-title', text: 'Dashboard' }),
+        el('p', { class: 'page-sub',
+          text: 'Overview of your research activity and bounty performance.' })
       ])
     ]));
 
@@ -4464,13 +4483,16 @@
              renders an empty track rather than a NaN width. */
           var awardTiles = [
             { k: 'Total bounty', v: fmtMoney(money.total, cur), badge: 'total',
+              pill: money.awards + ' / ' + money.reports,
               meter: [money.awards, money.reports],
               sub: money.awards + ' of ' + money.reports + ' reports carry an award' },
             { k: 'My share', v: fmtMoney(money.my_share, cur), badge: 'mine',
+              pill: money.total ? Math.min(100, money.my_share / money.total * 100).toFixed(1) + '%' : null,
               meter: [money.my_share, money.total],
               sub: money.splits ? (money.splits + ' payout split' + (money.splits === 1 ? '' : 's'))
                                 : 'no payout splits' },
             { k: 'Awards', v: String(money.awards), badge: 'awards',
+              pill: 'reports',
               meter: [money.awards, money.reports],
               sub: 'bounties awarded by the program' },
             /* The value reads "34 / 150" rather than the bare total, because on a card about
@@ -4479,6 +4501,7 @@
                `open` is optional - an older server that does not send it degrades to the plain
                total rather than rendering "undefined / 150". */
             { k: 'Reports',
+              pill: money.reports + ' total',
               meter: [money.open, money.reports],
               v: money.open === undefined || money.open === null
                 ? String(money.reports)
@@ -4491,13 +4514,11 @@
                    + (money.as_collaborator
                       ? ' | ' + money.as_collaborator + ' as collaborator' : '')) }
           ];
-          var card = el('section', { class: 'card moneycard' }, [
-            el('div', { class: 'card-head' }, [
-              el('div', { class: 'card-title', text: 'Bounty' }),
-            ]),
-            /* EVERY dashboard drill-through into the Tracker carries program=all. The dashboard
-               counts every program (server.py entity_scope); the Tracker shows one by default.
-               Without this the list you land on is smaller than the number you clicked. */
+          var card = el('div', { class: 'moneycard' }, [
+            /* No wrapping panel and no "Bounty" header: the eyebrow above already labels the
+               section, matching the mockup. Just the four tiles in their grid. EVERY drill-through
+               carries program=all so the list matches the number clicked (the tile counts every
+               program; the Tracker defaults to the primary one). */
             el('div', { class: 'moneytiles' }, awardTiles.map(function (t) {
               /* `v` is a plain string on every tile but Reports, which composes two spans so the
                  open count can carry its own colour. Accept either rather than making three
@@ -4505,16 +4526,18 @@
               var value = Array.isArray(t.v)
                 ? el('span', { class: 'mt-v' }, t.v)
                 : el('span', { class: 'mt-v', text: t.v || '—' });
-              /* Same shape as the count tiles: the badge gets its own host so the timed repaint
-                 can clear it, rather than appending a second badge every minute. */
+              /* Tile anatomy ported from the mockup: label + stat pill on top, then the big
+                 number, then the delta-badge row, the gradient meter, and the caption. */
               var kRow = el('span', { class: 'mt-k' }, [el('span', { text: t.k })]);
+              if (t.pill) kRow.appendChild(el('span', { class: 'mt-pill', text: t.pill }));
+              var mtKids = [kRow, value];
+              /* The delta badges (new / updated / award) sit in their OWN row under the number,
+                 as in the mockup. The host keeps its reference so the timed repaint still finds
+                 it; only its position in the tile changed. */
               if (t.badge) {
-                moneyHosts[t.badge] = el('span', { class: 'tile-badges' });
-                kRow.appendChild(moneyHosts[t.badge]);
+                moneyHosts[t.badge] = el('span', { class: 'tile-badges mt-badges' });
+                mtKids.push(moneyHosts[t.badge]);
               }
-              /* The gradient meter sits under the number/label, above the sub, matching the
-                 mockup's rhythm. Its width is the tile's own real ratio (see awardTiles.meter). */
-              var mtKids = [value, kRow];
               if (t.meter) mtKids.push(meterNode(t.meter[0], t.meter[1]));
               mtKids.push(el('span', { class: 'mt-s', text: t.sub }));
               /* program=all so the list matches the number that was just clicked: the tile counts
@@ -4747,7 +4770,7 @@
             /* Reports first, leads under them. A report is a result and a lead is work in
                progress, and the column is read top down. */
             breakdownCard('Reports by state', byState, {
-              statusColors: true,
+              statusColors: true, countLabel: 'categorized',
               hrefFor: function (k) {
                 return '#/reports?' + qsFrom({ status: k, program: ALL_PROGRAMS });
               }
@@ -4758,7 +4781,7 @@
                the rows counted here - without it the card would say 19 and the page would show
                72. Classes for API-only reports are derived from the CWE, see common.CWE_CLASS. */
             breakdownCard('Paid reports by class', byClass, {
-              limit: 12,
+              limit: 12, countLabel: 'awarded',
               hrefFor: function (k) {
                 return '#/reports?' + qsFrom({ 'class': k, paid: '1', program: ALL_PROGRAMS });
               }
@@ -7314,6 +7337,28 @@
     { view: 'settings', label: 'Settings' }
   ];
 
+  /* Line icons for the rail, one per view, stroked in currentColor so each follows its nav link's
+     colour (dim, or the accent when active) exactly like the brand gem and the cert seal. */
+  function navSvg(inner) {
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" ' +
+           'stroke-linecap="round" stroke-linejoin="round">' + inner + '</svg>';
+  }
+  var NAV_ICONS = {
+    dashboard: navSvg('<rect x="3" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5"/>'),
+    leads: navSvg('<path d="M5 21V4"/><path d="M5 4h12l-2.2 3.5L17 11H5"/>'),
+    reports: navSvg('<path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3.6 6h.01"/><path d="M3.6 12h.01"/><path d="M3.6 18h.01"/>'),
+    advisories: navSvg('<path d="M12 3l7.5 3.3V11c0 4.2-3 7.3-7.5 8.7C7.5 18.3 4.5 15.2 4.5 11V6.3z"/><path d="M12 8.5v3.5"/><path d="M12 15.5h.01"/>'),
+    programs: navSvg('<path d="M12 3l8.5 4.6L12 12.2 3.5 7.6z"/><path d="M3.5 12.2L12 16.8l8.5-4.6"/>'),
+    targets: navSvg('<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/>'),
+    payloads: navSvg('<path d="M8.5 8l-4 4 4 4"/><path d="M15.5 8l4 4-4 4"/>'),
+    files: navSvg('<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>'),
+    tokens: navSvg('<circle cx="8" cy="14.5" r="3.5"/><path d="M10.5 12L19 3.5"/><path d="M15.5 7l2.5 2.5"/>'),
+    integrations: navSvg('<path d="M10.5 13.5a4 4 0 0 0 5.7 0l2-2a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M13.5 10.5a4 4 0 0 0-5.7 0l-2 2a4 4 0 0 0 5.7 5.7l1-1"/>'),
+    audit: navSvg('<path d="M5 6l1.4 1.4L9 4.8"/><path d="M5 12l1.4 1.4L9 10.8"/><path d="M5 18l1.4 1.4L9 16.8"/><path d="M12 6h8"/><path d="M12 12h8"/><path d="M12 18h8"/>'),
+    status: navSvg('<path d="M3 12h4l2.5 6 4-13 2.5 7H21"/>'),
+    settings: navSvg('<path d="M4 7h9"/><path d="M17 7h3"/><path d="M4 17h3"/><path d="M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="7" cy="17" r="2"/>')
+  };
+
   var VIEWS = {
     dashboard: function (root) { dashboardView(root); },
     leads: function (root, ctx) { entityListView(root, ENTITIES.leads, ctx); },
@@ -7396,15 +7441,19 @@
         nav.appendChild(el('div', { class: 'nav-heading navtext', text: item.heading }));
         return;
       }
+      var navKids = [];
+      /* Line icon in the expanded rail; the first-letter mark takes over when collapsed. */
+      if (NAV_ICONS[item.view]) {
+        navKids.push(el('span', { class: 'navicon', 'aria-hidden': 'true',
+                                  html: NAV_ICONS[item.view] }));
+      }
+      navKids.push(el('span', { class: 'navmark', text: item.label.charAt(0).toUpperCase() }));
+      navKids.push(el('span', { class: 'navtext', text: item.label }));
       nav.appendChild(el('a', {
         class: 'navlink' + (state.route.view === item.view ? ' active' : ''),
         href: '#/' + item.view,
         title: item.label
-      }, [
-        /* Shown only when collapsed, so the rail stays navigable without labels. */
-        el('span', { class: 'navmark', text: item.label.charAt(0).toUpperCase() }),
-        el('span', { class: 'navtext', text: item.label })
-      ]));
+      }, navKids));
     });
     /* Pushed to the bottom of the rail by margin-top:auto, so the version sits in the
        bottom-left corner regardless of how many nav items there are. The certificate page moved
