@@ -55,6 +55,13 @@ try:
 except Exception:  # pragma: no cover
     screenshot_mod = None
 
+# Optional for the same reason: without it the Regression tab reports itself unavailable and the
+# rest of the console is untouched. It reads only rows the HackerOne sync already wrote.
+try:
+    import regression as regression_mod
+except Exception:  # pragma: no cover
+    regression_mod = None
+
 
 # ====================================================================== helpers
 def _json_default(o):
@@ -208,6 +215,10 @@ def r_stats(ctx, m):
         "reports_by_state": group(
             "SELECT state, COUNT(*) FROM reports WHERE source='hackerone' GROUP BY state"),
         "counts": counts,
+        # The Regression tile: how many shipped fixes are due a look, and how many turned out not
+        # to hold. Derived from `reports`, so it costs one extra pass over the resolved rows and
+        # cannot fail on a database that has never synced - `summary` returns zeros.
+        "regression": _regression_summary(c, ctx.cfg),
         # The client seeds its "new" watermark from this. Without it the dashboard fell back to
         # the browser clock, which runs on a different machine and in a different format from
         # the indexed_at values the watermark is compared against.
@@ -216,6 +227,19 @@ def r_stats(ctx, m):
         # CAST is safe here because phantom non-numeric values are cleared on sync.
         "bounty": _bounty_stats(c),
     }
+
+
+def _regression_summary(c, cfg):
+    """The dashboard's regression numbers, or zeros. Never raises: the dashboard is the first page
+    every session lands on, and one optional tile must not be able to take /api/stats down."""
+    if regression_mod is None:
+        return {"due": 0, "broken": 0, "total": 0, "available": False}
+    try:
+        out = regression_mod.summary(c, cfg)
+        out["available"] = True
+        return out
+    except Exception:
+        return {"due": 0, "broken": 0, "total": 0, "available": False}
 
 
 def _reports_by_class(c):
@@ -1926,6 +1950,10 @@ def r_schedule_set(ctx, m):
 SETTINGS_FIELDS = {
     # key -> (type, minimum, maximum). 0 is in range for session_hours and means "never expires".
     "session_hours": (int, 0, 24 * 365),
+    # Days after a report closes before the Regression tab calls its fix due a retest. Not zero:
+    # a window of zero makes every resolved report permanently due, which is the same as having no
+    # queue at all. See regression.window_days, which clamps to the same range.
+    "regression_window_days": (int, 1, 3650),
 }
 
 
@@ -1934,6 +1962,10 @@ def _settings_payload(cfg):
     return {
         "session_hours": hours,
         "session_expiry_enabled": hours > 0,
+        # Read through the module so the value the Settings tab shows is the CLAMPED one actually
+        # in force, not whatever integer happens to be sitting in config.json.
+        "regression_window_days": (regression_mod.window_days(cfg) if regression_mod
+                                   else int(cfg.get("regression_window_days", 30) or 30)),
         # Said here rather than only in the UI copy, so anyone reading the API sees the trade.
         "session_note": ("With expiry off the login cookie stays valid until you log out. This "
                          "app binds to loopback and holds unreported findings, so that is a "
@@ -2541,6 +2573,136 @@ def r_hacktivity_refresh(ctx, m):
     return out
 
 
+# ------------------------------------------------------------------ regression
+# The queue over shipped fixes. Every one of these reads or writes rows that are already local -
+# `reports` for the candidates, `regressions` for the verdicts - so none of them can be slowed
+# down, rate-limited or made to fail by HackerOne being unreachable.
+def _regression_mod():
+    """The module or a 503. Every route below opens with this, so a checkout missing the module
+    answers honestly on the tab instead of 500ing somewhere deeper."""
+    if regression_mod is None:
+        raise HttpError(503, "regression module unavailable")
+    return regression_mod
+
+
+@route("GET", r"/api/regression")
+def r_regression(ctx, m):
+    """The queue, its bucket counts and the window in force."""
+    mod = _regression_mod()
+    return mod.queue(ctx.conn, ctx.cfg,
+                     bucket=ctx.q("bucket", "due"),
+                     program=ctx.q("program", ""),
+                     q=ctx.q("q", ""),
+                     limit=ctx.q("limit", 200),
+                     offset=ctx.q("offset", 0))
+
+
+@route("GET", r"/api/regression/(\d+)")
+def r_regression_detail(ctx, m):
+    """One entry with the original report body and the triage thread attached.
+
+    The thread is the point: it is where the program said what it changed, and deciding what to
+    re-test without re-reading it is guesswork. Served from the local row, so it is only as current
+    as the last `h1.py --sync`.
+    """
+    mod = _regression_mod()
+    item = mod.detail(ctx.conn, m.group(1), ctx.cfg)
+    if item is None:
+        raise HttpError(404, "no resolved report #%s in this database" % m.group(1))
+    return item
+
+
+@route("POST", r"/api/regression/(\d+)/verdict", scope="write")
+def r_regression_verdict(ctx, m):
+    """Record what a retest found: holds, broken, skipped - or pending to clear a misclick."""
+    mod = _regression_mod()
+    h1_id = m.group(1)
+    body = ctx.body or {}
+    verdict = (body.get("verdict") or "").strip().lower()
+    note = body.get("note")
+    before = mod.detail(ctx.conn, h1_id, ctx.cfg)
+    if before is None:
+        raise HttpError(404, "no resolved report #%s in this database" % h1_id)
+    try:
+        out = mod.set_verdict(ctx.conn, h1_id, verdict, note=note)
+    except ValueError as e:
+        raise HttpError(400, str(e))
+    common.audit(ctx.conn, ctx.user, "regression_verdict", "reports", None,
+                 "#%s %s -> %s" % (h1_id, before.get("verdict"), verdict), ctx.remote)
+    return out
+
+
+@route("POST", r"/api/regression/(\d+)/snooze", scope="write")
+def r_regression_snooze(ctx, m):
+    """Push the due date out, or clear the override and fall back to the window."""
+    mod = _regression_mod()
+    h1_id = m.group(1)
+    body = ctx.body or {}
+    try:
+        if body.get("clear"):
+            out = mod.clear_snooze(ctx.conn, h1_id)
+        else:
+            out = mod.snooze(ctx.conn, h1_id, days=body.get("days"), due_on=body.get("due_on"))
+    except ValueError as e:
+        raise HttpError(400, str(e))
+    if out is None:
+        raise HttpError(404, "no resolved report #%s in this database" % h1_id)
+    common.audit(ctx.conn, ctx.user, "regression_snooze", "reports", None,
+                 "#%s due %s" % (h1_id, out.get("due_on")), ctx.remote)
+    return out
+
+
+@route("POST", r"/api/regression/(\d+)/lead", scope="write")
+def r_regression_lead(ctx, m):
+    """Draft the bypass lead for a fix that did not hold, and file it in a target's workspace.
+
+    Same contract as POST /api/leads - write the file, then re-index that one file - because the
+    markdown is the record and the row is the index of it. What this adds is the pre-fill: the
+    original report id, its close date, its asset, its CWE and the retest note, which are the
+    fields a bypass lead would otherwise be re-typed from the Tracker.
+
+    The lead is deliberately NOT written for any other verdict. A lead is a claim that something is
+    wrong, and drafting one for a fix that holds would put a false finding in the queue.
+    """
+    mod = _regression_mod()
+    h1_id = m.group(1)
+    item = mod.detail(ctx.conn, h1_id, ctx.cfg)
+    if item is None:
+        raise HttpError(404, "no resolved report #%s in this database" % h1_id)
+    if item.get("verdict") != "broken":
+        raise HttpError(400, "record a 'broken' verdict first; a lead states that a fix failed")
+
+    b = ctx.body or {}
+    target = (b.get("target") or "").strip()
+    ws = _target_workspace(ctx.conn, target) if target else None
+    if not ws:
+        raise HttpError(400, "unknown or missing target; pick the workspace to file the lead in")
+    # The report's own class where the CWE maps to one, and NOT common.UNCLASSED when it does not:
+    # that is a display label, and a literal `Unclassified/` directory in the workspace would be a
+    # class invented by a fallback. A lead with no class lands in the workspace's own notes/, which
+    # is exactly what ingest.classify_path expects.
+    klass = (b.get("class") or "").strip() or common.class_for_report(item)
+    if klass == common.UNCLASSED:
+        klass = None
+
+    folder = os.path.join(ws, klass, "notes") if klass else os.path.join(ws, "notes")
+    fname = common.slugify("%s-fix-bypass-%s" % (h1_id, item.get("title") or "")) + ".md"
+    dest = common.safe_under(ws, os.path.join(folder, fname))
+    if not dest:
+        raise HttpError(400, "resolved path escapes the workspace")
+    if os.path.exists(dest):
+        raise HttpError(409, "file already exists: " + dest)
+
+    common.write_text_atomic(dest, mod.lead_markdown(item, researcher=ctx.user or ""))
+    _reindex(ctx.conn, dest)
+    mod.record_lead(ctx.conn, h1_id, dest)
+    common.audit(ctx.conn, ctx.user, "regression_lead", "leads", None,
+                 "#%s -> %s" % (h1_id, dest), ctx.remote)
+    out = mod.detail(ctx.conn, h1_id, ctx.cfg)
+    out["lead_path"] = dest
+    return out
+
+
 @route("GET", r"/api/status")
 def r_status(ctx, m):
     """Everything the Status tab needs, in one request.
@@ -2553,6 +2715,9 @@ def r_status(ctx, m):
     out["integration"] = h1_mod.status(ctx.conn) if h1_mod else {"configured": False}
     out["poller"] = h1_watch_mod.status(ctx.conn) if h1_watch_mod else None
     out["hacktivity"] = hacktivity_mod.status(ctx.conn) if hacktivity_mod else None
+    # No job, no credential and no request, so there is no run history to report: the only honest
+    # health signal for the regression queue is how much of it has ever been looked at.
+    out["regression"] = regression_mod.status(ctx.conn, ctx.cfg) if regression_mod else None
 
     # Advisory feed freshness. The Audit Log already warns past 24h; the number belongs here too.
     def one(sql, default=None):
