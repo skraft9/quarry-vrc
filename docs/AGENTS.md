@@ -16,6 +16,7 @@ write files, and optionally call the API for structured queries.
 | **Reports** | pulled from the **HackerOne API** | HackerOne |
 | **Programs / scopes / targets** | the **HackerOne API** | HackerOne |
 | **Payloads** | a cloned reference library | the clone |
+| **Retest verdicts** | the `regressions` table, via the console or `regression.py` | you - it is a judgement, not an entity |
 
 The SQLite database is only a cache and a search index. You never edit it directly: you write a
 Markdown file, and Quarry indexes it (immediately in-app, or on the next `ingest.py --rebuild`).
@@ -165,6 +166,29 @@ python3 h1_graphql.py --add-collab REPORT_ID USER   # invite a collaborator to a
 python3 h1_graphql.py --set-split REPORT_ID USER 50 # set that collaborator's bounty split to 50%
 ```
 
+## Retesting a shipped fix
+
+The highest-yield surface an operator owns is the set of bugs already fixed for them: the patch is
+new code, written under deadline pressure, against one proof of concept that is already in the
+database. `core/regression.py` is that queue, derived from resolved reports - no HackerOne request,
+so it is free to poll.
+
+```bash
+python3 regression.py --queue                  # what is due, most overdue first
+python3 regression.py --show <report-id>       # the report body and the full triage thread
+python3 regression.py --verdict <report-id> --set holds  --note "replayed the PoC, 403"
+python3 regression.py --verdict <report-id> --set broken --note "the v2 route is unpatched"
+python3 regression.py --draft  <report-id>     # a starting lead for the bypass
+```
+
+Read the thread before planning the retest - it is where the program said what it changed, and the
+retest is only worth running against the paths that change did not cover. Record a verdict either
+way: a `holds` is what stops the same fix being re-checked every month, and a `broken` is what
+unlocks the drafted lead.
+
+A row marked `moved` had HackerOne activity after its verdict was recorded, which means the verdict
+no longer describes it. Re-read the thread on those first.
+
 ## A good agent loop
 
 1. Read the program's scope and rules of engagement (**Programs** / `GET /api/programs`).
@@ -172,5 +196,7 @@ python3 h1_graphql.py --set-split REPORT_ID USER 50 # set that collaborator's bo
 3. Confirm it, move it to `confirmed`, then `ready` once the report is drafted.
 4. File it (submit), and let the Tracker follow its fate.
 5. On closure, read the triage comment and record what you learned.
+6. When the fix ships, come back to it: `regression.py --queue` is the standing to-do that turns a
+   resolved report back into a candidate.
 
 Everything stays on the operator's box. Quarry is the memory and context engine; you are the pair.

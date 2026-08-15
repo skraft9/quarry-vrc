@@ -48,6 +48,10 @@ Quarry syncs and submits through the HackerOne API. Other platforms are not supp
   HackerOne API, so the console mirrors your real hunting instead of a spreadsheet you patch by hand.
 - **Find it, draft it, submit it.** File a finished report using the HackerOne API, then watch
   its state and bounty flow straight back into the Tracker.
+- **Your fixed bugs come back to you.** A resolved report is the surface you have an unfair
+  advantage on - the patch is new code, written fast, against one proof of concept you wrote. The
+  Regression tab queues every shipped fix for a retest, remembers what each one found, and drafts
+  the bypass lead when a fix turns out not to hold.
 - **A researcher's arsenal, built in.** Full-text search across every lead, report and payload, a
   payload library cloned from PayloadsAllTheThings, proxy and OS evidence capture wired to Caido and
   Burp, and live CVE/CVSS advisory feeds cross-referenced against your work.
@@ -104,6 +108,10 @@ python3 core/h1.py --sync-programs
 python3 core/h1.py --submit reports/<slug>.md --program <handle> \
   --weakness cwe-79 --scope "<in-scope asset>" --severity high
 
+# Which shipped fixes are due a retest, and record what one found
+python3 core/regression.py --queue
+python3 core/regression.py --verdict <report-id> --set broken --note "the v2 route is unpatched"
+
 # Rebuild the lead and report index from your workspace Markdown
 python3 core/ingest.py --rebuild
 
@@ -159,6 +167,7 @@ container can health-check itself; neither is a language dependency.)
 | **Dashboard** | Shows what you earned, what moved, and what is still open. |
 | **Leads** | Tracks your hunt notes from disk through a status workflow: open, confirmed, ready, submitted, awarded, parked, killed. |
 | **Tracker** | Lists every HackerOne report with state, bounty, CWE, impact, program, target and payout split. |
+| **Regression** | Queues the fixes shipped for your resolved reports for a retest, records what each retest found, and drafts the bypass lead when a fix does not hold. |
 | **Programs** | Holds your programs with their scope and rules of engagement; totals awards, average payout and earned. |
 | **Targets** | Maps in-scope assets from HackerOne to the local workspaces your leads are filed against. |
 | **Advisories** | Ingests any RSS/Atom vulnerability feed you configure (CISA, VulDB, or a vendor's) and cross-references it. |
@@ -217,9 +226,14 @@ and a query layer; it holds no entity it is the authority for.
 | Program guidelines, scopes | **HackerOne API** | `h1.py --sync-programs` |
 | Leads, RCAs, follow-ups | **Markdown in your workspace volume** | `ingest.py --rebuild` |
 | Payloads | **A git clone on disk**, never vendored | `scripts/sync-payloads.sh` |
+| Retest verdicts | **Your own judgement**, recorded in the console | not rebuildable - see below |
 
 - Storing leads as Markdown on disk is what lets an AI agent read, summarize and draft reports
   directly in your workspace context.
+- The one row above with no upstream is the exception that proves the rule: a retest verdict is an
+  OPINION about an entity, not an entity, and no source of truth outside your head holds it. The
+  queue it annotates is still derived from HackerOne on every read, so dropping the table loses
+  what you concluded and nothing you own.
 - Because HackerOne owns your reports, a rebuild never invents or overwrites them.
 - Anticipated money is held separately and never summed into the total, so a hand-typed figure can
   never turn an expectation into a confirmed award.
