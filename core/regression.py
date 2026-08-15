@@ -371,6 +371,8 @@ def set_verdict(conn, h1_id, verdict, note=None, tested_on=None):
 
     fields = {"verdict": verdict}
     if note is not None:
+        if not isinstance(note, str):
+            raise ValueError("note must be a string")
         fields["note"] = note
     if verdict != "pending":
         fields["last_tested"] = tested_on or today()
@@ -412,6 +414,8 @@ def snooze(conn, h1_id, days=None, due_on=None):
 def clear_snooze(conn, h1_id):
     """Drop the override and fall back to the derived due date."""
     ensure_schema(conn)
+    if not is_candidate(conn, h1_id):
+        raise ValueError("report %s is not a resolved HackerOne report in this database" % h1_id)
     _upsert(conn, h1_id, due_override=None)
     return detail(conn, h1_id)
 
@@ -490,7 +494,7 @@ def summary(conn, cfg=None):
     days = window_days(cfg)
     now = today()
     counts = {b: 0 for b in BUCKETS}
-    total = moved = tested = 0
+    total = moved = tested = broken_verdict = 0
     for row in conn.execute(CANDIDATE_SQL).fetchall():
         it = _decorate(row, days, now)
         counts[it["bucket"]] = counts.get(it["bucket"], 0) + 1
@@ -498,13 +502,17 @@ def summary(conn, cfg=None):
         moved += 1 if it["moved_since_test"] else 0
         # Counted off the VERDICT, not the bucket. A report that moved since its retest is back in
         # `due` while still carrying the verdict it was given, so counting buckets here would
-        # report it as never looked at - which is the one thing this number must not do.
+        # report it as never looked at - which is the one thing this number must not do. The same
+        # reasoning applies to `broken_verdict`: a fix found broken is still broken after the
+        # program touches the report, so the Status count reads it off the verdict, not the bucket.
         tested += 1 if it["verdict"] != "pending" else 0
+        broken_verdict += 1 if it["verdict"] == "broken" else 0
     return {
         "due": counts["due"],
         "scheduled": counts["scheduled"],
         "holds": counts["holds"],
         "broken": counts["broken"],
+        "broken_verdict": broken_verdict,
         "skipped": counts["skipped"],
         "moved": moved,
         "tested": tested,
@@ -524,7 +532,7 @@ def status(conn, cfg=None):
         "never_retested": s["total"] - s["tested"],
         "due_now": s["due"],
         "moved_since_test": s["moved"],
-        "fixes_broken": s["broken"],
+        "fixes_broken": s["broken_verdict"],
         "window_days": s["window_days"],
         "source": "derived from synced reports; makes no HackerOne request",
     }
