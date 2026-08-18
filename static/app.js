@@ -7383,44 +7383,78 @@
         testBtn.disabled = true;
         syncBtn.textContent = 'Syncing…';
         clear(outHost);
+
+        var barFill = el('div', { class: 'int-bar-fill' });
+        var barLabel = el('div', { class: 'int-bar-label', text: 'Starting the sync…' });
         append(outHost, el('div', { class: 'int-progress' }, [
-          loading('Two-phase sync running. The list endpoint carries no bounty or CVSS, so every ' +
-                  'report is fetched again individually — a full run takes about a minute. ' +
-                  'Leave this tab open.')
+          barLabel,
+          el('div', { class: 'int-bar' }, [barFill]),
+          el('div', { class: 'int-bar-note',
+                      text: 'The list carries no bounty or CVSS, so each report is fetched ' +
+                            'individually. A full run takes about a minute; you can leave this page.' })
         ]));
 
+        function reset() {
+          busy = false;
+          syncBtn.disabled = false;
+          testBtn.disabled = false;
+          syncBtn.textContent = 'Sync now';
+        }
+
+        function showResult(res) {
+          res = res || {};
+          var errs = Array.isArray(res.detail_errors) ? res.detail_errors.length : (res.detail_errors || 0);
+          toast('H1 sync: ' + (res.fetched || 0) + ' fetched, ' + (res['new'] || 0) + ' new, ' +
+                (res.updated || 0) + ' updated' + (errs ? ', ' + errs + ' errors' : '') + '.',
+                errs ? 'err' : 'ok');
+          clear(outHost);
+          append(outHost, el('div', { class: 'alert ' + (errs ? 'alert-warn' : 'alert-ok') },
+            'Sync finished in ' + Math.round((res.elapsed_ms || 0) / 100) / 10 + 's' +
+            (res.program ? ' for program "' + res.program + '"' : '') + '.'));
+          append(outHost, metaGrid([
+            integrationRow('Fetched', String(res.fetched || 0)),
+            integrationRow('New', String(res['new'] || 0)),
+            integrationRow('Updated', String(res.updated || 0)),
+            integrationRow('Unchanged', String(res.unchanged || 0)),
+            integrationRow('Enriched', String(res.enriched || 0)),
+            integrationRow('Body files written', String(res.written || 0)),
+            integrationRow('Detail errors', String(errs)),
+            integrationRow('Elapsed', ((res.elapsed_ms || 0) + ' ms'))
+          ]));
+          loadStatus();
+        }
+
+        function poll() {
+          api('/integrations/hackerone/sync/status', { method: 'GET' })
+            .then(function (st) {
+              st = st || {};
+              var total = st.total || 0, d = st.done || 0;
+              if (st.phase === 'listing' || total === 0) {
+                barFill.style.width = '8%';
+                barLabel.textContent = 'Listing reports…';
+              } else {
+                var pct = Math.max(2, Math.min(100, Math.round((d / total) * 100)));
+                barFill.style.width = pct + '%';
+                barLabel.textContent = 'Fetching report ' + d + ' of ' + total + ' (' + pct + '%)';
+              }
+              if (st.running) { setTimeout(poll, 900); return; }
+              reset();
+              if (st.error) {
+                clear(outHost);
+                append(outHost, errorPanel(st.error));
+                toastError(st.error);
+              } else {
+                barFill.style.width = '100%';
+                showResult(st.result);
+              }
+            })
+            .catch(function () { setTimeout(poll, 1500); });   // transient blip: keep polling
+        }
+
         api('/integrations/hackerone/sync', { method: 'POST', body: {} })
-          .then(function (res) {
-            busy = false;
-            syncBtn.disabled = false;
-            testBtn.disabled = false;
-            syncBtn.textContent = 'Sync now';
-            res = res || {};
-            var errs = Array.isArray(res.detail_errors) ? res.detail_errors.length : (res.detail_errors || 0);
-            toast('H1 sync: ' + (res.fetched || 0) + ' fetched, ' + (res['new'] || 0) + ' new, ' +
-                  (res.updated || 0) + ' updated' + (errs ? ', ' + errs + ' errors' : '') + '.',
-                  errs ? 'err' : 'ok');
-            clear(outHost);
-            append(outHost, el('div', { class: 'alert ' + (errs ? 'alert-warn' : 'alert-ok') },
-              'Sync finished in ' + Math.round((res.elapsed_ms || 0) / 100) / 10 + 's' +
-              (res.program ? ' for program "' + res.program + '"' : '') + '.'));
-            append(outHost, metaGrid([
-              integrationRow('Fetched', String(res.fetched || 0)),
-              integrationRow('New', String(res['new'] || 0)),
-              integrationRow('Updated', String(res.updated || 0)),
-              integrationRow('Unchanged', String(res.unchanged || 0)),
-              integrationRow('Enriched', String(res.enriched || 0)),
-              integrationRow('Body files written', String(res.written || 0)),
-              integrationRow('Detail errors', String(errs)),
-              integrationRow('Elapsed', ((res.elapsed_ms || 0) + ' ms'))
-            ]));
-            loadStatus();
-          })
+          .then(function () { poll(); })
           .catch(function (err) {
-            busy = false;
-            syncBtn.disabled = false;
-            testBtn.disabled = false;
-            syncBtn.textContent = 'Sync now';
+            reset();
             clear(outHost);
             append(outHost, errorPanel(err));
             toastError(err);

@@ -1222,7 +1222,7 @@ def write_report_file(row):
     return path
 
 
-def sync(conn, verbose=True, program_handle=None):
+def sync(conn, verbose=True, program_handle=None, progress=None):
     """Full two-phase sync. `program_handle=None` means EVERY program, as it does everywhere else
     in this module; pass a handle to narrow it."""
     username, token, _primary = get_credentials()
@@ -1265,7 +1265,12 @@ def sync(conn, verbose=True, program_handle=None):
     # report is fetched individually. That is one request per report and the reason this stays a
     # manual/nightly operation rather than the 15-minute poll (h1_watch.py), which only fetches
     # the details of reports the list says have moved.
-    for r in rows:
+    _total = len(rows)
+    for _i, r in enumerate(rows):
+        # Phase 2 is the slow half (one request per report); report how many are done so a caller
+        # can drive a progress bar instead of an indefinite spinner. progress=None for the CLI.
+        if progress:
+            progress(_i, _total)
         try:
             time.sleep(POLITE_DELAY)
             # The LIST payload's handle is the fallback, not the sync scope: with the sync no

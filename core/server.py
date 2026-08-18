@@ -20,6 +20,7 @@ import re
 import ssl
 import subprocess
 import sys
+import threading
 import time
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -2330,19 +2331,76 @@ def r_h1_test(ctx, m):
         raise HttpError(502, str(e))
 
 
+# The H1 sync runs in the background so the request returns at once and the page polls progress,
+# rather than holding one request open for the ~1 minute a full two-phase sync takes. One operator,
+# so a single module-level state is enough; the lock guards the worker thread's writes to it.
+_H1_SYNC = {"running": False, "phase": "idle", "done": 0, "total": 0,
+            "result": None, "error": None, "started_at": 0.0, "finished_at": 0.0}
+_H1_SYNC_LOCK = threading.Lock()
+
+
+def _run_h1_sync(program_handle, user, remote):
+    """Worker with its OWN connection (a sqlite handle cannot cross threads), publishing progress
+    into _H1_SYNC. h1.sync does not commit, so we commit here, exactly as the request framework did
+    for the old synchronous endpoint - otherwise the whole sync (bounties included) is lost."""
+    conn = common.connect()
+    t0 = time.time()
+    try:
+        def cb(done, total):
+            with _H1_SYNC_LOCK:
+                _H1_SYNC["phase"] = "enriching"
+                _H1_SYNC["done"] = done
+                _H1_SYNC["total"] = total
+        res = h1_mod.sync(conn, verbose=False, program_handle=program_handle, progress=cb)
+        res["elapsed_ms"] = int((time.time() - t0) * 1000)
+        try:
+            common.audit(conn, user, "h1_sync", detail=json.dumps(res), remote=remote)
+        except Exception:
+            pass
+        conn.commit()
+        with _H1_SYNC_LOCK:
+            _H1_SYNC["result"] = res
+            _H1_SYNC["phase"] = "done"
+            _H1_SYNC["total"] = res.get("fetched", _H1_SYNC["total"]) or _H1_SYNC["total"]
+            _H1_SYNC["done"] = _H1_SYNC["total"]
+    except Exception as e:
+        with _H1_SYNC_LOCK:
+            _H1_SYNC["error"] = str(e)
+            _H1_SYNC["phase"] = "error"
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+        with _H1_SYNC_LOCK:
+            _H1_SYNC["running"] = False
+            _H1_SYNC["finished_at"] = time.time()
+
+
 @route("POST", r"/api/integrations/hackerone/sync", scope="write")
 def r_h1_sync(ctx, m):
     if not h1_mod:
         raise HttpError(503, "hackerone module unavailable")
-    t0 = time.time()
-    try:
-        res = h1_mod.sync(ctx.conn, verbose=False,
-                          program_handle=(ctx.body or {}).get("program_handle"))
-    except h1_mod.H1Error as e:
-        raise HttpError(502, str(e))
-    res["elapsed_ms"] = int((time.time() - t0) * 1000)
-    common.audit(ctx.conn, ctx.user, "h1_sync", detail=json.dumps(res), remote=ctx.remote)
-    return res
+    u, t, _ = h1_mod.get_credentials()
+    if not (u and t):
+        raise HttpError(400, "no HackerOne credential stored")
+    with _H1_SYNC_LOCK:
+        if _H1_SYNC["running"]:
+            return dict(_H1_SYNC)          # already in flight; the page just polls the status route
+        _H1_SYNC.update({"running": True, "phase": "listing", "done": 0, "total": 0,
+                         "result": None, "error": None,
+                         "started_at": time.time(), "finished_at": 0.0})
+    handle = (ctx.body or {}).get("program_handle")
+    threading.Thread(target=_run_h1_sync, args=(handle, ctx.user, ctx.remote),
+                     daemon=True).start()
+    return {"started": True, "running": True}
+
+
+@route("GET", r"/api/integrations/hackerone/sync/status")
+def r_h1_sync_status(ctx, m):
+    """Progress for the in-flight (or last) H1 sync, so the Integrations page can draw a bar."""
+    with _H1_SYNC_LOCK:
+        return dict(_H1_SYNC)
 
 
 # The accessible-programs list is 6+ paged requests, so it is cached in memory for a few minutes:

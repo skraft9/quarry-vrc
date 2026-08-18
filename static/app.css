@@ -1583,8 +1583,12 @@ a.statechip:hover { text-decoration: none; border-color: var(--accent); }
 .int-status .metagrid { margin-bottom: 10px; }
 .int-out:empty { display: none; }
 .int-out { margin: 10px 0 0; }
-.int-progress { border: 1px dashed var(--accent); border-radius: var(--radius-sm); background: var(--accent-bg); }
+.int-progress { border: 1px dashed var(--accent); border-radius: var(--radius-sm); background: var(--accent-bg); padding: 14px 16px; }
 .int-progress .loading { color: var(--accent); }
+.int-bar { height: 8px; margin: 8px 0 6px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+.int-bar-fill { height: 100%; width: 0; background: var(--accent); border-radius: 999px; transition: width .35s ease; }
+.int-bar-label { font-size: 13px; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
+.int-bar-note { font-size: 12px; color: var(--text-mute); margin-top: 2px; }
 .int-formtitle {
   margin: 18px 0 8px; padding-top: 14px; border-top: 1px solid var(--line-soft);
   font-size: 12px; font-weight: 650; text-transform: uppercase; letter-spacing: .05em;
