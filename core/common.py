@@ -581,11 +581,18 @@ def client_allowed(remote_ip, allow_list):
 
 
 def path_denied(path, deny_globs):
-    """True if path matches any deny glob, on the full path or any single component."""
+    """True if path matches any deny glob, on the full path or any single component.
+
+    Case-insensitive: the deny globs are lowercase, and the match must not be evadable by
+    re-casing a name (`.ENV`, `ID_RSA`, `Credentials.json`). This deny-list is a convenience
+    overlay to avoid surfacing key material by accident, not the confinement boundary; the
+    boundary is safe_under(). See THREAT_MODEL.md.
+    """
     import fnmatch
-    p = os.path.normpath(path)
+    p = os.path.normpath(path).lower()
     name = os.path.basename(p)
     for pat in deny_globs or []:
-        if fnmatch.fnmatch(name, pat) or fnmatch.fnmatch(p, pat) or fnmatch.fnmatch(p, "*/" + pat):
+        pat = pat.lower()
+        if fnmatch.fnmatchcase(name, pat) or fnmatch.fnmatchcase(p, pat) or fnmatch.fnmatchcase(p, "*/" + pat):
             return True
     return False
