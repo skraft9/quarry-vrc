@@ -37,7 +37,9 @@ GRAPHQL_URL = "https://hackerone.com/graphql"
 USER_AGENT = "quarry-h1-graphql/1.0"
 HTTP_TIMEOUT = 30
 
-SECRETS_PATH = os.path.join(common.APP_DIR, "secrets.json")
+# At the instance ROOT (next to config.json), never inside core/, so a code redeploy cannot wipe it.
+# See the note in h1.py; the migration there moves a legacy core/secrets.json up to the root.
+SECRETS_PATH = os.path.join(common.ROOT_DIR, "secrets.json")
 
 
 # ------------------------------------------------------------------ secrets

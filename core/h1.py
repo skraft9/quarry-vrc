@@ -47,7 +47,19 @@ POLITE_DELAY = 0.35
 # not a legal HackerOne handle, so it cannot collide with a real program.
 ALL_PROGRAMS = "all"
 
-SECRETS_PATH = os.path.join(common.APP_DIR, "secrets.json")
+# At the instance ROOT (next to config.json), never inside core/. Secrets that live in the code
+# directory are wiped by a code redeploy (an rsync of core/ with --delete removes any file the repo
+# does not carry, and secrets.json is git-ignored, so it vanishes). The root is on the data volume
+# and deploys never reach it.
+SECRETS_PATH = os.path.join(common.ROOT_DIR, "secrets.json")
+_OLD_SECRETS_PATH = os.path.join(common.APP_DIR, "secrets.json")
+try:
+    # One-time migration for a build that stored secrets under core/. Idempotent and guarded so it
+    # is safe to run from either module regardless of import order.
+    if os.path.exists(_OLD_SECRETS_PATH) and not os.path.exists(SECRETS_PATH):
+        os.replace(_OLD_SECRETS_PATH, SECRETS_PATH)
+except OSError:
+    pass
 
 # --------------------------------------------------------------- collaborators
 # The hacker API has no `collaborators` relationship (verified against #0000000, which genuinely
