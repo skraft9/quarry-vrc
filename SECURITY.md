@@ -29,9 +29,11 @@ See [`THREAT_MODEL.md`](THREAT_MODEL.md) for the full picture: the deployment as
 * Second-order injection from ingested upstream data (a HackerOne triage comment, an RSS/Atom advisory, a synced Git repo) that breaks markdown or FTS5 parsing or injects script into the UI.
 * Unauthenticated access to write-only HackerOne credentials or stored Bearer tokens.
 * Escaping the configured workspace root (path traversal, symlink, or otherwise), or code execution, in markdown parsing, FTS5 search, or workspace endpoints. Reading files inside the operator's own root is within operator authority, not a boundary; see `THREAT_MODEL.md`.
+* Privilege escalation from a read-scoped token to write capability, or from any token to code execution in the container or on the host.
 
 ### Out of Scope
 * Anything an authenticated token does within the operator's own authority on their own host: reading their own files inside the configured root, or making the instance reach a network location their host can already reach. See the accepted risks in `THREAT_MODEL.md`.
 * Attacks requiring prior root/admin access to the underlying host or Docker daemon.
 * Deployments running without `QUARRY_ADMIN_PASSWORD` or exposing plain HTTP outside the container setup.
 * Volumetric denial-of-service against your own local instance.
+* Findings that only hold under a multi-user, shared-tenant, or public-internet deployment that Quarry VRC does not implement. Name the assumption you broke and it will be read on those terms.
