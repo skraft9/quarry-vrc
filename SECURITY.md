@@ -19,7 +19,7 @@ Submit a disclosure privately via **Security** -> **Report a vulnerability** on 
 
 Quarry VRC is designed to run on a private host or local environment you control. It uses zero third-party runtime packages to eliminate supply chain attack surface.
 
-See [`THREAT_MODEL.md`](THREAT_MODEL.md) for the full picture: the deployment assumptions this scope rests on, the three trust levels, and a named list of accepted risks, each with the condition under which it would become in scope.
+See [`THREAT_MODEL.md`](THREAT_MODEL.md) for the full picture: the deployment assumptions this scope rests on, its trust levels, and a named list of accepted risks, each with the condition under which it would become in scope.
 
 ### In Scope
 * Authentication bypasses, token leaks, or logic flaws in session handling.
