@@ -1293,6 +1293,17 @@ def sync(conn, verbose=True, program_handle=None, progress=None):
         stats[upsert_report(conn, r)] += 1
     stats["expected_filled"] = recover_expected_from_tracker(conn)
     stats["programs_indexed"] = index_programs(conn)
+    # Recompute each program's stored bounty_earned from its LOCAL awarded reports, using the exact
+    # predicate the dashboard total and the money invariant use (source='hackerone', bounty <> '').
+    # HackerOne's own program-level "bounties earned" stat lags the per-report data, so relying on
+    # it let the Programs list drift below the dashboard total. Stored '' when a program has no
+    # awards, so the column shows a dash rather than $0.00.
+    conn.execute(
+        "UPDATE programs SET bounty_earned = ("
+        " SELECT CASE WHEN COUNT(*) = 0 THEN ''"
+        "             ELSE printf('%.2f', COALESCE(SUM(CAST(r.bounty AS REAL)), 0)) END"
+        "   FROM reports r WHERE r.program = programs.slug"
+        "     AND r.source = 'hackerone' AND r.bounty <> '')")
     if verbose:
         print("h1 sync (%s): fetched=%d new=%d updated=%d unchanged=%d programs=+%d"
               % (stats["program"], stats["fetched"], stats["new"], stats["updated"],
