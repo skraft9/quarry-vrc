@@ -25,6 +25,8 @@ See [`THREAT_MODEL.md`](THREAT_MODEL.md) for the full picture: the deployment as
 * Authentication bypasses, token leaks, or logic flaws in session handling.
 * Bypasses of the client IP allow-list (`QUARRY_ALLOWLIST`).
 * Stored XSS or injection vulnerabilities that break the Content Security Policy (`default-src 'none'`).
+* Cross-origin or client-side attacks that reach the local instance through the operator's browser (DNS rebinding, CSRF, or cross-origin API access).
+* Second-order injection from ingested upstream data (a HackerOne triage comment, an RSS/Atom advisory, a synced Git repo) that breaks markdown or FTS5 parsing or injects script into the UI.
 * Unauthenticated access to write-only HackerOne credentials or stored Bearer tokens.
 * Escaping the configured workspace root (path traversal, symlink, or otherwise), or code execution, in markdown parsing, FTS5 search, or workspace endpoints. Reading files inside the operator's own root is within operator authority, not a boundary; see `THREAT_MODEL.md`.
 
