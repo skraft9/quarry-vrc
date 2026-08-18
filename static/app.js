@@ -4615,7 +4615,7 @@
              fix we ever earned would sit there unchanged forever. It opens the bucket it counts.
              A zero is the honest reading on a console that has never synced, and the tab says so
              when you get there. */
-          { k: 'Retests due', n: (s.regression || {}).due, href: '#/regression?bucket=due' },
+          { k: 'Retests due', n: (s.regression || {}).due, href: '#/regression?bucket=due', spark: 'regression' },
           /* Replaced the Uploads tile: an upload count says nothing about the state of a hunt,
              where the size of the payload arsenal is a live figure worth seeing. A zero here
              means the arsenal has never been synced (scripts/sync-payloads.sh), which is

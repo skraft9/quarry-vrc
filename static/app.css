@@ -942,12 +942,15 @@ a.cwe-badge:hover { border-color: var(--accent); color: var(--accent); }
    keeps its natural height at the top of its column instead of stretching to match a left
    column that grows every time a breakdown card is added. */
 .dash-split {
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px;
-  /* stretch, not start: hacktivity matches the height of the stacked column beside it and
-     scrolls its own rows, instead of ending a third of the way down with dead space under it. */
+  /* Breakdown cards take two-thirds in their own grid, hacktivity the last third, so Reports by
+     state | Paid reports by class | Program hacktivity read as three equal columns, matching the
+     mockup. Extra breakdown cards flow across the two left columns rather than stacking narrow. */
+  display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 14px;
+  /* stretch, not start: hacktivity matches the height of the column beside it and scrolls its own
+     rows, instead of ending a third of the way down with dead space under it. */
   align-items: stretch;
 }
-.dash-col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.dash-col { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; min-width: 0; align-content: start; }
 /* The gap owns the spacing between cards here; per-card margins would stack on top of it. */
 .dash-col > .card, .dash-split > .hacktivity { margin-bottom: 0; }
 /* The card must MATCH the left column's height, never set it. Stretch alone could not do that:
@@ -971,6 +974,7 @@ a.cwe-badge:hover { border-color: var(--accent); color: var(--accent); }
 .dash-split .ha-rows { max-width: none; }
 @media (max-width: 900px) {
   .dash-split { grid-template-columns: 1fr; }
+  .dash-col { grid-template-columns: 1fr; }
   /* Stacked, there is no column to match, so the card goes back to flowing at its own height. */
   .dash-side { position: static; min-height: 0; }
   .dash-side > .hacktivity { position: static; }

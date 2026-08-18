@@ -202,6 +202,10 @@ def r_stats(ctx, m):
                 % (ENTITIES[name]["table"], entity_scope(name))).fetchone()[0]
         except Exception:
             counts[name] = 0
+    # Feed the regression tile's number into `counts` so its sparkline ends on the same figure the
+    # tile prints, like every other overview tile. Computed once and reused for the tile below.
+    reg = _regression_summary(c, ctx.cfg)
+    counts["regression"] = reg.get("due", 0)
     return {
         # 'unknown' is excluded everywhere leads are counted, matching ENTITIES["leads"] above,
         # so the dashboard and the Leads tab never disagree on how many leads exist.
@@ -240,7 +244,7 @@ def r_stats(ctx, m):
         # The Regression tile: how many shipped fixes are due a look, and how many turned out not
         # to hold. Derived from `reports`, so it costs one extra pass over the resolved rows and
         # cannot fail on a database that has never synced - `summary` returns zeros.
-        "regression": _regression_summary(c, ctx.cfg),
+        "regression": reg,
         # The client seeds its "new" watermark from this. Without it the dashboard fell back to
         # the browser clock, which runs on a different machine and in a different format from
         # the indexed_at values the watermark is compared against.
@@ -417,6 +421,14 @@ def _overview_sparklines(c, counts):
     out["payloads"] = _cumulative_series(
         stamps("SELECT indexed_at FROM payloads"),
         counts.get("payloads", 0))
+    # The Retests-due tile has no table of its own (the queue is derived from resolved reports), so
+    # its line rides the resolved-report pool the queue is drawn from and ends on the due count. If
+    # nothing is resolved yet, _cumulative_series degrades to a smooth ramp, so the tile still gets
+    # a rising line like the others instead of a blank space.
+    out["regression"] = _cumulative_series(
+        stamps("SELECT COALESCE(submitted_on, first_seen_at, indexed_at) FROM reports l WHERE "
+               + entity_scope("reports") + " AND l.state = 'resolved'"),
+        counts.get("regression", 0))
     return out
 
 
