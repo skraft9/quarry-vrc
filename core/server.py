@@ -1407,9 +1407,11 @@ def r_screenshot(ctx, m):
       request_id   Caido request id (for caido backend)
       item_index   Burp history index (for burp backend)
       mode         'interactive' | 'fullscreen' | 'window' (for os backend)
-      caido_url    override Caido API URL
-      burp_url     override Burp API URL
       caido_token  Caido auth token
+
+    The Caido/Burp backend host is fixed by the CAIDO_URL / BURP_URL environment
+    variables and is deliberately not taken from the request body, so a write-scoped
+    request cannot steer the server's outbound host. See THREAT_MODEL.md.
     """
     if not screenshot_mod:
         raise HttpError(503, "screenshot module unavailable")
@@ -1422,8 +1424,6 @@ def r_screenshot(ctx, m):
             request_id=b.get("request_id"),
             item_index=b.get("item_index"),
             mode=b.get("mode", "interactive"),
-            caido_url=b.get("caido_url"),
-            burp_url=b.get("burp_url"),
             caido_token=b.get("caido_token"),
             conn=ctx.conn,
         )
@@ -1479,9 +1479,11 @@ def r_evidence_feed(ctx, m):
       backend      'auto' | 'caido' | 'burp'
       hosts        list of hostnames to filter (overrides scope lookup)
       limit        max items to pull (default: 20)
-      caido_url    override Caido API URL
-      burp_url     override Burp API URL
       caido_token  Caido auth token
+
+    The Caido/Burp backend host is fixed by the CAIDO_URL / BURP_URL environment
+    variables and is deliberately not taken from the request body, so a write-scoped
+    request cannot steer the server's outbound host. See THREAT_MODEL.md.
     """
     if not screenshot_mod:
         raise HttpError(503, "screenshot module unavailable")
@@ -1496,8 +1498,6 @@ def r_evidence_feed(ctx, m):
             backend=b.get("backend", "auto"),
             hosts=hosts,
             limit=min(int(b.get("limit", 20)), 100),
-            caido_url=b.get("caido_url"),
-            burp_url=b.get("burp_url"),
             caido_token=b.get("caido_token"),
             conn=ctx.conn,
         )
