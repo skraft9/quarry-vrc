@@ -109,8 +109,8 @@ res = server.r_stats(types.SimpleNamespace(conn=conn, cfg={}), None)
 check("response carries a sparklines block", isinstance(res.get("sparklines"), dict))
 sp = res.get("sparklines", {})
 counts = res.get("counts", {})
-check("all six overview entities have a series",
-      set(sp) == {"reports", "leads", "advisories", "programs", "scopes", "payloads"}, sorted(sp))
+check("all seven overview entities have a series",
+      set(sp) == {"reports", "leads", "advisories", "programs", "scopes", "payloads", "regression"}, sorted(sp))
 for name, series in sp.items():
     check("%s series has SPARK_POINTS points" % name, len(series) == P, len(series))
     check("%s series is non-decreasing" % name, nondecreasing(series), series)

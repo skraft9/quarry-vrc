@@ -421,14 +421,12 @@ def _overview_sparklines(c, counts):
     out["payloads"] = _cumulative_series(
         stamps("SELECT indexed_at FROM payloads"),
         counts.get("payloads", 0))
-    # The Retests-due tile has no table of its own (the queue is derived from resolved reports), so
-    # its line rides the resolved-report pool the queue is drawn from and ends on the due count. If
-    # nothing is resolved yet, _cumulative_series degrades to a smooth ramp, so the tile still gets
-    # a rising line like the others instead of a blank space.
-    out["regression"] = _cumulative_series(
-        stamps("SELECT COALESCE(submitted_on, first_seen_at, indexed_at) FROM reports l WHERE "
-               + entity_scope("reports") + " AND l.state = 'resolved'"),
-        counts.get("regression", 0))
+    # The Retests-due tile has no timeline of its own (the queue is derived, not a table), so its
+    # line is a smooth ramp to the current due count rather than a reconstructed history. Still a
+    # rising line like the others, ending on the exact number the tile prints. Passing real stamps
+    # here would be wrong: their count is the resolved-report pool, not the due count, and the two
+    # disagreeing makes _cumulative_series non-monotone.
+    out["regression"] = _cumulative_series([], counts.get("regression", 0))
     return out
 
 
