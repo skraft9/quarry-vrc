@@ -105,7 +105,7 @@ INSERT INTO payloads(id,category,payload,file_path,indexed_at) VALUES
 """)
 conn.commit()
 
-res = server.r_stats(types.SimpleNamespace(conn=conn), None)
+res = server.r_stats(types.SimpleNamespace(conn=conn, cfg={}), None)
 check("response carries a sparklines block", isinstance(res.get("sparklines"), dict))
 sp = res.get("sparklines", {})
 counts = res.get("counts", {})
