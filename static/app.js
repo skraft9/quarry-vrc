@@ -7832,6 +7832,8 @@
     dashboard: navSvg('<rect x="3" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5"/>'),
     leads: navSvg('<path d="M5 21V4"/><path d="M5 4h12l-2.2 3.5L17 11H5"/>'),
     reports: navSvg('<path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3.6 6h.01"/><path d="M3.6 12h.01"/><path d="M3.6 18h.01"/>'),
+    // A refresh loop: regression is the retest queue, shipped fixes looped back through to confirm.
+    regression: navSvg('<path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/>'),
     advisories: navSvg('<path d="M12 3l7.5 3.3V11c0 4.2-3 7.3-7.5 8.7C7.5 18.3 4.5 15.2 4.5 11V6.3z"/><path d="M12 8.5v3.5"/><path d="M12 15.5h.01"/>'),
     programs: navSvg('<path d="M12 3l8.5 4.6L12 12.2 3.5 7.6z"/><path d="M3.5 12.2L12 16.8l8.5-4.6"/>'),
     targets: navSvg('<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/>'),
