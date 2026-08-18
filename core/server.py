@@ -27,7 +27,21 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import auth
 import common
 
-VERSION = "1.3.3"
+
+def _read_version():
+    """The single source of truth for the running version is the VERSION file at the repo root, so
+    the sidebar, /api/health and the startup banner always reflect the build actually shipped. A
+    hardcoded constant here drifted (it sat at 1.3.3 through several releases); reading the file
+    makes that impossible. Falls back to 0.0.0 only if the file is somehow absent, which reads as
+    an obviously-unidentified build rather than a wrong number."""
+    try:
+        with open(os.path.join(common.ROOT_DIR, "VERSION"), encoding="utf-8") as f:
+            return f.read().strip() or "0.0.0"
+    except OSError:
+        return "0.0.0"
+
+
+VERSION = _read_version()
 MAX_BODY = 64 * 1024 * 1024  # 64 MB ceiling on any request body
 COOKIE_MAX_AGE_NEVER = 10 * 365 * 24 * 3600  # see r_login: "never expires", in cookie terms
 
