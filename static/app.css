@@ -1010,6 +1010,14 @@ a.tile:hover { border-color: var(--accent); text-decoration: none; }
 .barrow .bt { background: var(--bg-sunk); border-radius: 999px; height: 9px; overflow: hidden; }
 .barrow .bf { height: 100%; border-radius: 999px; background: var(--accent); min-width: 2px; }
 .barrow .bn { font-variant-numeric: tabular-nums; font-weight: 650; min-width: 34px; text-align: right; }
+/* Font trial (2026-08-18): pull the breakdown bar rows and the hacktivity feed toward the upper
+   money/overview tiles' display character - tighter tracking and lined-up figures, text kept
+   white. Grouped so it is easy to tune or revert after a look. */
+.barrow { letter-spacing: -.012em; }
+.barrow .bl, .barrow .bl-t { color: var(--text); }
+.barrow .bn { color: var(--text); font-weight: 700; letter-spacing: -.02em; }
+.hacktivity .ha-who, .hacktivity .ha-title { color: var(--text); }
+.hacktivity .ha-act, .hacktivity .ha-who, .hacktivity .ha-title { letter-spacing: -.012em; }
 .bf.s-open, .sw.s-open { background: var(--warn); }
 .bf.s-confirmed, .sw.s-confirmed { background: var(--info); }
 .bf.s-ready, .sw.s-ready { background: var(--ready); }
