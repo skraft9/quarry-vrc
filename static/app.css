@@ -1927,11 +1927,11 @@ a.matchbadge:hover { text-decoration: none; filter: brightness(1.08); }
    against the border. The strip below restores the house header, and the inner title gives up
    its own padding and border so the two do not double up. */
 .hacktivity .ha-head {
-  display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  padding: 9px 14px; border-bottom: 1px solid var(--line-soft); background: var(--panel-2);
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 9px 12px; border-bottom: 1px solid var(--line-soft); background: var(--panel-2);
   border-radius: var(--radius) var(--radius) 0 0;
 }
-.hacktivity .ha-head .card-title { padding: 0; border-bottom: 0; }
+.hacktivity .ha-head .card-title { padding: 0; border-bottom: 0; font-size: 10.5px; }
 .hacktivity .ha-head .card-sub { margin-top: 3px; }
 /* Body inset, matching .bars on the breakdown cards. */
 .hacktivity .ha-rows,
@@ -1940,7 +1940,15 @@ a.matchbadge:hover { text-decoration: none; filter: brightness(1.08); }
 .hacktivity .empty { padding-left: 14px; padding-right: 14px; }
 .hacktivity .ha-rows { padding-top: 4px; padding-bottom: 6px; }
 .hacktivity .ha-foot { margin: 0 14px; padding: 8px 0 10px; }
-.ha-head-r { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.ha-head-r { display: flex; align-items: center; gap: 6px; min-width: 0; }
+/* The picker hugs the program name instead of stretching the row: it shrinks with an ellipsis for a
+   long name, and the freshness pill and Refresh keep their place rather than being pushed off the
+   edge of the narrow breakdown column. */
+.hacktivity .ha-head-r select {
+  min-width: 0; max-width: 118px; flex: 0 1 auto;
+  font-size: 12px; padding: 5px 8px; text-overflow: ellipsis;
+}
+.hacktivity .hpill { font-size: 9.5px; padding: 2px 7px; letter-spacing: .01em; }
 /* Capped, not full-bleed. The card spans the dashboard, but a row stretched to that width put
    the age at the far right edge with a stretch of empty space in front of it, so reading "how
    long ago" meant tracking all the way across. The cap keeps the age next to the text it dates.

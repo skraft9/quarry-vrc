@@ -45,9 +45,16 @@ function almost(a, b) { return Math.abs(a - b) < 1e-6; }
 function linePoints(svg) {
   const m = svg.match(/<path d="([^"]+)" fill="none"/);
   if (!m) return [];
-  const nums = m[1].match(/-?\d+(?:\.\d+)?/g).map(Number);
+  const d = m[1];
+  const N = '-?\\d+(?:\\.\\d+)?';
   const pts = [];
-  for (let i = 0; i + 1 < nums.length; i += 2) pts.push([nums[i], nums[i + 1]]);
+  // The line is `M x y` then a cubic `C cx1 cy1 cx2 cy2 x y` per following point; the ANCHOR (the
+  // last pair of each command) is the data vertex, the control points are not.
+  const mm = d.match(new RegExp('M(' + N + ') (' + N + ')'));
+  if (mm) pts.push([Number(mm[1]), Number(mm[2])]);
+  const cre = new RegExp('C' + N + ' ' + N + ' ' + N + ' ' + N + ' (' + N + ') (' + N + ')', 'g');
+  let cm;
+  while ((cm = cre.exec(d))) pts.push([Number(cm[1]), Number(cm[2])]);
   return pts;
 }
 

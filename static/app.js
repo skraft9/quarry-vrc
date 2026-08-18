@@ -4384,16 +4384,20 @@
       var y = h - 2 - ((v - min) / rng) * (h - 6);
       return [x, y];
     });
-    // Smooth curve instead of hard-elbowed straight segments. The T (smooth-quadratic) shorthand
-    // reflects each control point off the previous one, so the line eases through every anchor as
-    // a gentle spline - yet the `d` string still carries ONLY the anchor coordinates (two numbers
-    // per point), which is what keeps this a real curve without hand-placed control points and
-    // lets the render test read one [x,y] vertex per data point exactly as before. The first T
-    // after the M has an implicit control at the start point, so the leading segment eases in
-    // rather than kinking, and a flat series stays a level line.
-    var line = pts.map(function (p, i) {
-      return (i ? 'T' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1);
-    }).join(' ');
+    // A smooth line that CANNOT overshoot. Each segment is a cubic whose two control points sit at
+    // the horizontal midpoint between neighbours - one at the start point's height, one at the
+    // end point's - so the curve eases between values but never bulges past either. A reflected-
+    // control spline (the old T shorthand) overshot on stepped data and drew the wiggles that made
+    // a tile reading "3" look like a rollercoaster. The stroke path still exposes exactly one
+    // ANCHOR per data point (the M, then the final pair of each C), which the render test reads as
+    // its vertices, and a flat series stays a level line.
+    var line = 'M' + pts[0][0].toFixed(1) + ' ' + pts[0][1].toFixed(1);
+    for (var si = 1; si < n; si++) {
+      var pa = pts[si - 1], pb = pts[si];
+      var mx = ((pa[0] + pb[0]) / 2).toFixed(1);
+      line += ' C' + mx + ' ' + pa[1].toFixed(1) + ' ' + mx + ' ' + pb[1].toFixed(1)
+            + ' ' + pb[0].toFixed(1) + ' ' + pb[1].toFixed(1);
+    }
     var area = line + ' L' + w + ' ' + h + ' L0 ' + h + ' Z';
     var gid = 'qspark' + (++sparkSeq);
     var last = pts[pts.length - 1];
