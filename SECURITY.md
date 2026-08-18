@@ -1,9 +1,6 @@
 # Supported Versions
 
-| Version | Supported |
-| ------- | ------------------ |
-| 1.4.x   | :white_check_mark: |
-| < 1.4.0 | :x:                |
+Quarry VRC ships as a single rolling release. Only the latest published version is supported, and only reports made against that version are accepted. If you are on an older build, please update to the latest release before reporting.
 
 # Reporting a Vulnerability
 
