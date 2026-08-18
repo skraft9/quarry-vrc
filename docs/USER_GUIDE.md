@@ -36,18 +36,19 @@ model see [`ARCHITECTURE.md`](ARCHITECTURE.md); for driving Quarry with an AI ag
   - [5.2 Dashboard](#52-dashboard)
   - [5.3 Leads](#53-leads)
   - [5.4 Tracker](#54-tracker)
-  - [5.5 Advisories](#55-advisories)
-  - [5.6 Programs](#56-programs)
-  - [5.7 Targets](#57-targets)
-  - [5.8 Payloads](#58-payloads)
-  - [5.9 Files](#59-files)
-  - [5.10 Tokens](#510-tokens)
-  - [5.11 Integrations](#511-integrations)
-  - [5.12 Audit log](#512-audit-log)
-  - [5.13 Status](#513-status)
-  - [5.14 Settings](#514-settings)
-  - [5.15 Certificates](#515-certificates)
-  - [5.16 Global search](#516-global-search)
+  - [5.5 Regression](#55-regression)
+  - [5.6 Advisories](#56-advisories)
+  - [5.7 Programs](#57-programs)
+  - [5.8 Targets](#58-targets)
+  - [5.9 Payloads](#59-payloads)
+  - [5.10 Files](#510-files)
+  - [5.11 Tokens](#511-tokens)
+  - [5.12 Integrations](#512-integrations)
+  - [5.13 Audit log](#513-audit-log)
+  - [5.14 Status](#514-status)
+  - [5.15 Settings](#515-settings)
+  - [5.16 Certificates](#516-certificates)
+  - [5.17 Global search](#517-global-search)
 - [6. The lead workflow](#6-the-lead-workflow)
 - [7. HackerOne integrations](#7-hackerone-integrations)
   - [7.1 The API token (sync and submit)](#71-the-api-token-sync-and-submit)
@@ -164,7 +165,7 @@ binding its port. Both are idempotent and self-heal on the next start.
   [2.6](#26-trusting-the-tls-certificate)).
 - Sign in with `QUARRY_ADMIN_USER` / `QUARRY_ADMIN_PASSWORD`.
 - The session cookie is `HttpOnly`, `Secure`, `SameSite=Strict`. By default the session never
-  expires (loopback app, single operator); change this in Settings (see [5.14](#514-settings)).
+  expires (loopback app, single operator); change this in Settings (see [5.15](#515-settings)).
 
 Login is rate-limited to 5 attempts per 15 minutes per source address. The limiter is in-memory and
 resets on restart.
@@ -173,7 +174,7 @@ resets on restart.
 
 Open the **Certificates** page from the seal icon beside the version in the sidebar footer. It shows
 the certificate details and serves the local CA so you can trust it once and stop the browser
-warning for good (see [5.15](#515-certificates)).
+warning for good (see [5.16](#516-certificates)).
 
 ### 2.7 Updating
 
@@ -240,12 +241,17 @@ query layer that can be rebuilt at any time.
 | Leads, RCAs, follow-ups | Markdown in your workspace volume | `ingest.py --rebuild` |
 | Payloads | A git clone on disk, never vendored | `scripts/sync-payloads.sh` |
 | Advisories | The configured RSS/Atom feeds | `advisories.py --sync` |
+| Retest verdicts | Your own judgement, in the `regressions` table | Not rebuildable |
 
 Consequences that matter:
 
 - Because HackerOne owns your reports, a rebuild never invents or overwrites them.
 - Anticipated money is held separately and never summed into a confirmed total, so a hand-typed
   figure can never turn an expectation into a confirmed award.
+- The one row with no upstream is the exception that proves the rule: a retest verdict is an
+  opinion ABOUT an entity rather than an entity, and nothing outside your head holds it. The queue
+  it annotates is still derived from HackerOne on every read, so dropping the `regressions` table
+  loses what you concluded and nothing you own.
 
 ### 3.3 Workspace layout
 
@@ -293,7 +299,7 @@ Access to Quarry has two levels:
   HackerOne, and change settings.
 
 A browser session (from the login form) always has write scope. API tokens are issued as either
-`read` or `write` (see [5.10](#510-tokens)). A read token can query everything but cannot mutate
+`read` or `write` (see [5.11](#511-tokens)). A read token can query everything but cannot mutate
 anything.
 
 ### 3.6 Local-first, standard-library-only design
@@ -343,7 +349,7 @@ The navigation entries, in order:
 
 | Group | Tabs |
 |---|---|
-| Research | Dashboard, Leads, Tracker, Advisories, Programs, Targets, Payloads |
+| Research | Dashboard, Leads, Tracker, Regression, Advisories, Programs, Targets, Payloads |
 | Admin | Files, Tokens, Integrations, Audit log, Status, Settings |
 | Footer | Certificates (seal icon) |
 
@@ -360,7 +366,11 @@ The at-a-glance view of what you earned, what moved, and what is still open.
 - **Money tiles:** confirmed total bounty, your share (which differs from the total on a split
   payout), number of awards, number of splits, and how many reports you hold as a collaborator.
   Anticipated money is shown separately and never added to the confirmed total.
-- **Counts:** leads, reports, programs, targets, scopes, uploads, payloads, advisories.
+- **Counts:** leads, reports, programs, targets, scopes, uploads, payloads, advisories, and
+  **retests due** - shipped fixes waiting on a second look, which opens
+  [5.5 Regression](#55-regression) already filtered to that bucket. It counts what is DUE rather
+  than every resolved report, because the tile is a to-do and a count of every fix you ever earned
+  would sit there unchanged forever.
 - **Breakdowns:** leads by status and by target; paid reports by class and by target/program;
   reports by state. Each is a link into the filtered list.
 - **Hacktivity tile:** the selected program's public activity feed, served from local storage (never
@@ -409,7 +419,51 @@ Every HackerOne report the account can see, synced from the API.
 The Tracker is HackerOne-sourced only. Local drafts, RCAs and follow-up comments are deliberately
 excluded so the list mirrors HackerOne exactly.
 
-### 5.5 Advisories
+### 5.5 Regression
+
+The Tracker's back half: the fixes shipped for your resolved reports, and what a retest found.
+
+A resolved report is the one piece of attack surface you have an unfair advantage on. The patch is
+new code, written under deadline pressure, by someone who saw a single proof of concept and very
+often defended against that request rather than against the bug - and you already know the class,
+the endpoint, the parameter and the bypass that worked once. This tab is the reminder to go back,
+with the evidence attached.
+
+- **The queue is derived, never maintained.** Every HackerOne-sourced report in state `resolved`
+  with a close date is a candidate, computed on each read. Nothing to sync, nothing to clean up: a
+  report the program reopens leaves the queue on the next `h1.py --sync`.
+- **Columns:** report id, program, title, asset, the date the fix closed, when a retest is due, the
+  verdict, and what the original earned. The bounty is not decoration - it is the best available
+  proxy for how much the program cared, and so for how carefully the fix was written.
+- **The window.** A fix reads as due `regression_window_days` after the report closed, 30 by
+  default, changeable in [5.15 Settings](#515-settings). It is a prompt, not a deadline: it only
+  decides what order the list is read in.
+- **Verdicts:** `holds` (retested, the fix stands), `broken` (incomplete or bypassable), `skipped`
+  (target retired, access gone). A report nobody has looked at is `pending` and carries no stored
+  row at all. Clearing a verdict puts it back in the queue and keeps the note.
+- **Snooze** pushes the due date out by 7 or 30 days without recording a verdict, for the fix that
+  is known to still be rolling out. It sits below the verdicts and is deliberately quieter.
+- **Detail pane:** the original report body and the full triage thread. The thread is the point -
+  it is where the program said what it changed, which is the paragraph a retest is planned from.
+- **Draft the bypass lead.** On a `broken` verdict only, this writes a pre-filled lead into a
+  workspace you pick - the original report id, its close date, asset and CWE, and your retest note,
+  in the [`LEAD_STANDARD`](../standards/LEAD_STANDARD.md) header-table shape - then indexes it, so
+  it appears in Leads immediately. It is refused on any other verdict, because a lead is a claim
+  that something is wrong.
+
+**The `moved` badge is the one to open first.** `resolved_on` records the *first* time a report
+closed and is never rewritten, so a report that was reopened and re-resolved carries the close date
+of the fix *before* the one you would be re-testing - and that is exactly the population an
+incomplete fix produces. So the window is not the only thing that surfaces a report: any row whose
+HackerOne activity is newer than the date its verdict was recorded comes back to the top of the
+queue marked `moved`, whatever that verdict was. The verdict stays on the row as a record, and the
+note and retest count are kept, but it no longer describes the report.
+
+Nothing on this tab contacts HackerOne. It is a query over rows the sync already wrote, so it works
+offline, costs no API budget and cannot be rate-limited - and it is only as current as your last
+`h1.py --sync`.
+
+### 5.6 Advisories
 
 A cross-referenced feed of published vulnerabilities.
 
@@ -425,7 +479,7 @@ A cross-referenced feed of published vulnerabilities.
   module; in a build without it the match endpoints return `503 module unavailable` and the matching
   UI is inert. Feed ingestion itself is always available.
 
-### 5.6 Programs
+### 5.7 Programs
 
 Your programs with their scope and rules of engagement.
 
@@ -438,7 +492,7 @@ Your programs with their scope and rules of engagement.
 - **Sync:** `h1.py --sync-programs` fills each program's guidelines and scopes (two API requests per
   program, so it is a manual pass, not a cron one). New programs are onboarded from Integrations.
 
-### 5.7 Targets
+### 5.8 Targets
 
 Maps in-scope assets to the local workspaces your leads are filed against.
 
@@ -447,7 +501,7 @@ Maps in-scope assets to the local workspaces your leads are filed against.
   program a lead ultimately belongs to.
 - Editable fields: name, version, source_path, codeql_db.
 
-### 5.8 Payloads
+### 5.9 Payloads
 
 A searchable payload library.
 
@@ -463,7 +517,7 @@ A searchable payload library.
 - The library is kept outside the workspace so the lead scanner never mistakes a cheatsheet for a
   lead.
 
-### 5.9 Files
+### 5.10 Files
 
 A file browser over the configured roots (`/workspace` and `/payloads` by default).
 
@@ -476,7 +530,7 @@ A file browser over the configured roots (`/workspace` and `/payloads` by defaul
   denied rather than hidden, so you can see the guard is working. The deny-list is on by default
   because this UI is network-reachable.
 
-### 5.10 Tokens
+### 5.11 Tokens
 
 Server-side Bearer tokens for non-browser clients (scripts, agents, CI).
 
@@ -488,7 +542,7 @@ Server-side Bearer tokens for non-browser clients (scripts, agents, CI).
 - Only `sha256(token)` is stored, so a database read never yields a usable token. The list shows the
   name, prefix, scope, creation and last-used times.
 
-### 5.11 Integrations
+### 5.12 Integrations
 
 Where you connect HackerOne. It has three cards.
 
@@ -507,7 +561,7 @@ Where you connect HackerOne. It has three cards.
 If the optional GraphQL module is missing from a build, the invitations card shows "module
 unavailable" instead of erroring.
 
-### 5.12 Audit log
+### 5.13 Audit log
 
 An append-only record of what happened: logins, credential changes, syncs, status changes, file
 writes, submissions, token creation, and more.
@@ -516,7 +570,7 @@ writes, submissions, token creation, and more.
   (`web`, `cron`, `cli`, or `h1-api`).
 - Read-only in the UI; the newest entries first.
 
-### 5.13 Status
+### 5.14 Status
 
 A one-request health dashboard: the running version, the HackerOne integration state, the advisory
 feed freshness (count, newest published, last fetched, match count), the index counts (reports,
@@ -525,18 +579,26 @@ reports with body, reports with thread, leads), and the money summary.
 The poller and hacktivity health blocks are populated by their respective modules; in a build
 without the optional poller module the poller block is null rather than an error.
 
-### 5.14 Settings
+The regression block reports **coverage** rather than job health, because there is no job: no
+credential, no request and so no run history to report. It carries the number of resolved reports,
+how many have ever been given a verdict, how many never have, how many are due now, and how many
+fixes turned out not to hold.
+
+### 5.15 Settings
 
 The small set of operator settings that are safe to change from a form.
 
 - **Session expiry:** off by default (the login cookie stays valid until you log out), because the
   app binds to loopback and holds unreported findings. Set a positive number of hours to enable a
   timeout. A change applies to sessions created from the next login onward, not retroactively.
+- **Regression window:** how many days after a report closes its fix reads as due a retest on
+  [5.5 Regression](#55-regression). Default 30, clamped to 1-3650. Raising it shortens the queue;
+  it never discards a verdict.
 - **Job cadence:** poll intervals for the background jobs. This editor depends on the optional
   schedule module; in a build without it the interval endpoints return `503` and the editor is
   absent, while every job keeps running on whatever the crontab already says.
 
-### 5.15 Certificates
+### 5.16 Certificates
 
 Reached from the seal icon by the version in the sidebar footer. It shows:
 
@@ -547,7 +609,7 @@ Reached from the seal icon by the version in the sidebar footer. It shows:
 
 Only public certificate material is ever served. Private keys are never read, parsed or handed out.
 
-### 5.16 Global search
+### 5.17 Global search
 
 Full-text search over leads, reports and payloads.
 
@@ -932,6 +994,35 @@ is Python standard library only.
 | `--json` | JSON output. |
 | `--quiet` | Suppress progress. |
 
+### `core/regression.py` (retest queue for shipped fixes)
+
+| Flag | Purpose |
+|---|---|
+| `--queue` | List the queue. |
+| `--bucket B` | `due` (default), `scheduled`, `holds`, `broken`, `skipped` or `all`. |
+| `--program HANDLE` | One program. |
+| `--search TEXT` | Substring of title, report id, asset or retest note. |
+| `--limit N` | Rows to print (default 50). |
+| `--show H1_ID` | One entry as JSON, with the report body and triage thread. |
+| `--verdict H1_ID --set V` | Record a verdict: `holds`, `broken`, `skipped` or `pending` to clear. |
+| `--note TEXT` | What the retest found (with `--verdict`). |
+| `--snooze H1_ID` | Push the due date out. |
+| `--days N` / `--due-on DATE` | By N days from today, or to an explicit `YYYY-MM-DD`. |
+| `--draft H1_ID` | Print a starting lead for a bypass of that report's fix. |
+| `--status` | Coverage and the window in force. |
+| `--json` | JSON output. |
+
+```bash
+# What is due now, most overdue first
+python3 core/regression.py --queue
+
+# Record what a retest found, then draft the lead for a fix that did not hold
+python3 core/regression.py --verdict 0000000 --set broken --note "the v2 route is unpatched"
+python3 core/regression.py --draft 0000000 > /workspace/vulns_example/BAC/notes/bypass.md
+```
+
+Reads only rows `h1.py --sync` already wrote; it makes no HackerOne request.
+
 ### Scripts
 
 | Command | Purpose |
@@ -1076,6 +1167,11 @@ Common list query parameters: `q` (search), `program`, `target`, `class`, `statu
 | POST | `/api/h1/poll` | **write**. Run one poll now. Optional module. |
 | GET | `/api/hacktivity` | The program activity feed from storage. |
 | POST | `/api/hacktivity/refresh` | **write**. Poll HackerOne once; can set the watched program. |
+| GET | `/api/regression` | The retest queue: `?bucket=` `&program=` `&q=` `&limit=` `&offset=`. |
+| GET | `/api/regression/<h1_id>` | One entry with the original report body and triage thread. |
+| POST | `/api/regression/<h1_id>/verdict` | **write**. `{verdict, note}`. Verdict is `holds`, `broken`, `skipped` or `pending`. |
+| POST | `/api/regression/<h1_id>/snooze` | **write**. `{days}`, `{due_on}` or `{clear: true}`. |
+| POST | `/api/regression/<h1_id>/lead` | **write**. `{target, class?}`. Drafts the bypass lead; requires a `broken` verdict. |
 | GET | `/api/schedule` | Poll intervals. Optional module. |
 | POST | `/api/schedule` | **write**. Set intervals. Optional module. |
 | GET | `/api/status` | The Status tab's one-request health payload. |
@@ -1117,6 +1213,7 @@ Keys a user touches:
 | `allow_remote` | The IP allow-list. Bare IPs and CIDRs. Empty means open. |
 | `db_path` | Database filename or absolute path. |
 | `session_hours` | Session lifetime; `0` means never expires. |
+| `regression_window_days` | Days after a report closes before its fix reads as due a retest. Default `30`. |
 | `min_password_length` | Enforced by `--adduser`. |
 | `browse_roots` | The trees exposed in the Files tab. |
 | `browse_deny_globs` | Paths blocked in the file browser (key material, dotfiles, databases). |

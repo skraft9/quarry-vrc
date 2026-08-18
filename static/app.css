@@ -2536,3 +2536,41 @@ body.redacted .md {
 .thread-rule {
   border: 0; border-top: 1px solid var(--line); margin: 22px 0 18px;
 }
+
+
+/* ----------------------------------------------------------------- regression
+   The queue over shipped fixes. Almost everything here is borrowed - .filters, .card, table.data,
+   .pill, .workpanel - so this block holds only the three things the tab needed that nothing else
+   in the app expresses: a chip that carries a count, an overdue figure that has to read as a
+   warning without shouting, and the mark on a row the program touched after we tested it. */
+
+/* One row of bucket chips inside the filter card. NOT .excludebar, which is a stacked column with
+   its own padding and rule because it lives inside a list card; this sits in .filters like any
+   other field control. */
+.reg-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+
+/* The count riding on a bucket chip. Dimmer than the label and never bold: the word is what is
+   being chosen, the number is only how much is behind it. */
+.chipcount {
+  margin-left: 6px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  color: var(--text-mute);
+}
+.btn.chip-program.on .chipcount { color: inherit; opacity: .8; }
+
+/* Overdue is the one figure on the tab that is asking for something. Warn, not danger: the fix
+   being unchecked is a to-do, and a column of red would put every ordinary row at the same
+   volume as a broken fix. */
+.reg-over {
+  color: var(--warn);
+  font-size: 12px; font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* The report moved after our retest. The badge in the title cell is the primary signal - a row
+   tint alone cannot be read on a phone, where the table becomes cards - and this edge only makes
+   the same rows findable when scanning a full-width table. */
+.cell-title .rowtag { display: inline-block; margin-left: 6px; vertical-align: 1px; }
+tr.reg-moved > td:first-child { box-shadow: inset 2px 0 0 var(--warn); }

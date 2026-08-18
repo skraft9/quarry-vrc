@@ -279,3 +279,29 @@ CREATE TABLE IF NOT EXISTS hacktivity (
   fetched_at    TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_hacktivity_at ON hacktivity(activity_at);
+
+-- ---------------------------------------------------------------- regressions
+-- Verdicts from re-testing the fixes shipped for our resolved reports. Owned entirely by
+-- regression.py.
+--
+-- The QUEUE is not stored. It is computed on every read from `reports` - every HackerOne-sourced
+-- report in state `resolved` with a close date - so HackerOne stays the authority on which of our
+-- findings were fixed, and a report the program reopens leaves the queue on the next sync with no
+-- cleanup path having to exist. Every row HERE is a human judgement about one of those reports:
+-- what a retest found, when, and whether the due date was pushed out. A report nobody has looked
+-- at yet has no row.
+--
+-- Not a foreign key to reports(h1_id): the sync rewrites those rows, and a verdict has to outlive
+-- a re-sync. Deleting this table loses opinions and nothing else.
+CREATE TABLE IF NOT EXISTS regressions (
+  h1_id       TEXT PRIMARY KEY,
+  verdict     TEXT NOT NULL DEFAULT 'pending',   -- holds | broken | skipped
+  note        TEXT,                       -- what the retest did, in the operator's words
+  due_override TEXT,                      -- 'YYYY-MM-DD' snooze. NULL = derived from the window.
+  last_tested TEXT,                       -- date of the most recent verdict
+  attempts    INTEGER NOT NULL DEFAULT 0, -- how many times a verdict has been recorded
+  lead_path   TEXT,                       -- the lead file a `broken` verdict was drafted into
+  created_at  TEXT,
+  updated_at  TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_regressions_verdict ON regressions(verdict);

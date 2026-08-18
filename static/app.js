@@ -4611,6 +4611,11 @@
              `targets` is the 3 local workspace directories. A tile that disagrees with the page
              it opens is worse than no tile. */
           { k: 'Targets', n: counts.scopes, href: '#/targets', spark: 'scopes' },
+          /* Fixes DUE a retest, not resolved reports - the tile is a to-do, and a count of every
+             fix we ever earned would sit there unchanged forever. It opens the bucket it counts.
+             A zero is the honest reading on a console that has never synced, and the tab says so
+             when you get there. */
+          { k: 'Retests due', n: (s.regression || {}).due, href: '#/regression?bucket=due' },
           /* Replaced the Uploads tile: an upload count says nothing about the state of a hunt,
              where the size of the payload arsenal is a live figure worth seeing. A zero here
              means the arsenal has never been synced (scripts/sync-payloads.sh), which is
@@ -6060,6 +6065,448 @@
     return out.sort();
   }
 
+  /* ============================================================== regression
+     The queue over shipped fixes: which of our resolved reports is due a retest, and what the
+     retest found. The list is DERIVED server-side from the Tracker's resolved rows, so there is
+     nothing to sync here and no Refresh that talks to HackerOne - re-rendering the tab is the
+     refresh, exactly like Targets.
+
+     Two things drive the ordering and both are shown rather than implied: `moved_since_test`,
+     meaning the program touched the report after we tested it, and `days_overdue`. A row that
+     moved is the one to open first, so it carries a badge instead of relying on position. */
+
+  /* Verdict -> the pill class it borrows. The same st-* scale the Tracker's states use, so a
+     colour means the same thing on both tabs: green is a finished good outcome, red is something
+     that needs acting on, grey is an outcome we chose not to pursue. `broken` is the one verdict
+     in the vocabulary that is a FINDING rather than a closure, which is why it takes the danger
+     colour that nothing else on this tab uses. */
+  var REGRESSION_VERDICT_CLASS = {
+    'pending': 'st-new',
+    'holds': 'st-resolved',
+    'broken': 'st-duplicate',
+    'skipped': 'st-muted'
+  };
+
+  var REGRESSION_BUCKETS = [
+    { key: 'due', label: 'Due' },
+    { key: 'scheduled', label: 'Scheduled' },
+    { key: 'broken', label: 'Fix broken' },
+    { key: 'holds', label: 'Fix holds' },
+    { key: 'skipped', label: 'Skipped' },
+    { key: 'all', label: 'All' }
+  ];
+
+  var REGRESSION_VERDICT_HINT = {
+    'holds': 'Retested, the fix stands.',
+    'broken': 'The fix is incomplete or bypassable. Draft the lead.',
+    'skipped': 'Deliberately not retesting this one.',
+    'pending': 'Clear the verdict and put it back in the queue.'
+  };
+
+  function regressionVerdictPill(v) {
+    var s = String(v || 'pending').toLowerCase();
+    return el('span', {
+      class: 'pill ' + (REGRESSION_VERDICT_CLASS[s] || 'st-unknown'),
+      text: s, title: REGRESSION_VERDICT_HINT[s] || ''
+    });
+  }
+
+  /* "34 days overdue" / "in 6 days". Reads as a sentence in the cell rather than as a signed
+     number the reader has to work out the sign of. */
+  function regressionDueCell(r) {
+    var over = Number(r.days_overdue || 0);
+    if (over > 0) {
+      return el('span', {
+        class: 'reg-over', text: over + 'd overdue',
+        title: 'Due ' + (r.due_on || 'unknown')
+      });
+    }
+    return el('span', {
+      class: 'tiny dim', text: r.due_on || '-',
+      title: r.snoozed ? 'Snoozed. Window would have made it ' + (r.due_derived || '-')
+                       : 'Fix closed ' + (r.resolved_on || 'unknown')
+    });
+  }
+
+  function regressionView(root, ctx) {
+    var q = (ctx && ctx.q) || new URLSearchParams('');
+    var params = {
+      bucket: q.get('bucket') || 'due',
+      program: q.get('program') || '',
+      q: q.get('q') || ''
+    };
+    var openId = (ctx && ctx.id) || null;
+
+    function go(patch) {
+      var next = {};
+      for (var k in params) next[k] = params[k];
+      for (var p in patch) next[p] = patch[p];
+      var qs = qsFrom(next);
+      location.hash = '#/regression' + (openId ? '/' + openId : '') + (qs ? '?' + qs : '');
+    }
+
+    root.appendChild(el('div', { class: 'page-head' }, [
+      el('div', {}, [
+        el('h1', { class: 'page-title', text: 'Regression' }),
+        el('p', {
+          class: 'page-sub',
+          text: 'The fixes shipped for your resolved reports, and what a retest found. ' +
+                'Derived from the Tracker; makes no HackerOne request.'
+        })
+      ])
+    ]));
+
+    var filters = el('div', { class: 'filters card' });
+    root.appendChild(filters);
+
+    var host = el('div', {});
+    root.appendChild(host);
+
+    var paneHost = el('div', {});
+    root.appendChild(paneHost);
+
+    function load() {
+      clear(host);
+      append(host, loading('Reading the queue...'));
+      api('/regression?' + qsFrom({
+        bucket: params.bucket, program: params.program, q: params.q, limit: 500
+      })).then(draw).catch(function (err) {
+        clear(host);
+        clear(filters);
+        append(host, el('div', { class: 'pane-body' }, errorPanel(err, load)));
+      });
+    }
+
+    function drawFilters(data) {
+      clear(filters);
+
+      /* Counts on the chips, because "Due 12" is the whole reason to look at this tab and a bare
+         label makes you click each one to find out. They count the WHOLE queue, not the filtered
+         page, so the numbers do not move as you filter. */
+      var chips = el('div', { class: 'field grow' }, [
+        el('span', { class: 'field-label', text: 'Show' }),
+        el('div', { class: 'reg-chips' }, REGRESSION_BUCKETS.map(function (b) {
+          var n = (data.counts || {})[b.key];
+          return el('button', {
+            class: 'btn chip-program' + (params.bucket === b.key ? ' on' : ''),
+            type: 'button',
+            'aria-pressed': params.bucket === b.key ? 'true' : 'false',
+            onclick: function () { go({ bucket: b.key }); }
+          }, [
+            el('span', { text: b.label }),
+            el('span', { class: 'chipcount', text: n === undefined ? '' : String(n) })
+          ]);
+        }))
+      ]);
+      filters.appendChild(chips);
+
+      filters.appendChild(field('Program', selectEl(
+        [{ value: '', label: 'All programs' }].concat((data.programs || []).map(function (p) {
+          return { value: p, label: p };
+        })), params.program, function (v) { go({ program: v }); })));
+
+      var input = el('input', {
+        type: 'search', value: params.q, placeholder: 'title, id, asset, note...',
+        spellcheck: 'false'
+      });
+      input.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') go({ q: input.value });
+      });
+      filters.appendChild(el('label', { class: 'field grow' }, [
+        el('span', { class: 'field-label', text: 'Search' }), input
+      ]));
+
+      filters.appendChild(el('div', { class: 'field' }, [
+        el('span', { class: 'field-label', text: ' ' }),
+        el('span', {
+          class: 'tiny dim',
+          text: 'Window ' + data.window_days + ' days',
+          title: 'A fix reads as due this many days after the report closed. Change it in Settings.'
+        })
+      ]));
+    }
+
+    function draw(data) {
+      drawFilters(data);
+      clear(host);
+      var items = data.items || [];
+
+      if (!(data.counts || {}).all) {
+        host.appendChild(empty('No resolved reports yet',
+          'This queue is built from reports HackerOne has marked resolved. Run ' +
+          '`python3 h1.py --sync` to pull them.'));
+        return;
+      }
+      if (!items.length) {
+        host.appendChild(empty('Nothing in this bucket',
+          params.bucket === 'due'
+            ? 'Every shipped fix has been looked at, or is still inside the ' +
+              data.window_days + '-day window.'
+            : 'Try another filter.'));
+        return;
+      }
+
+      host.appendChild(dataTable([
+        {
+          key: 'h1_id', label: 'Report', cls: 'cell-mono nowrap tiny',
+          render: function (r) { return '#' + r.h1_id; }
+        },
+        { key: 'program', label: 'Program', cls: 'cell-mono nowrap tiny' },
+        {
+          key: 'title', label: 'Title', cls: 'cell-title',
+          render: function (r) {
+            return el('span', {}, [
+              el('span', { text: r.title || '' }),
+              /* The badge, not the sort position, is what says "this one moved". A reader
+                 scanning the list cannot see an ordering rule, only a mark. */
+              r.moved_since_test
+                ? el('span', {
+                    class: 'rowtag rowtag-updated', text: 'moved',
+                    title: 'The program touched this report after your retest, so the verdict ' +
+                           'below no longer describes it.'
+                  })
+                : null
+            ]);
+          }
+        },
+        { key: 'asset', label: 'Asset', cls: 'cell-mono tiny dim' },
+        {
+          key: 'resolved_on', label: 'Fixed', cls: 'nowrap tiny',
+          render: function (r) {
+            return el('span', {
+              text: r.resolved_on || '-',
+              title: (r.days_since_fix === null || r.days_since_fix === undefined)
+                ? '' : r.days_since_fix + ' days ago'
+            });
+          }
+        },
+        { key: 'due_on', label: 'Due', cls: 'nowrap', render: regressionDueCell },
+        {
+          key: 'verdict', label: 'Verdict', cls: 'nowrap',
+          render: function (r) { return regressionVerdictPill(r.verdict); }
+        },
+        {
+          key: 'bounty', label: 'Paid', cls: 'nowrap tiny',
+          render: function (r) {
+            /* What the original earned. Not decoration: it is the best available proxy for how
+               much the program cared, and therefore for how carefully the fix was written. */
+            return r.bounty ? fmtMoney(r.bounty, r.currency) : el('span', { class: 'muted', text: '-' });
+          }
+        }
+      ], items, {
+        cards: true,
+        idKey: 'h1_id',
+        selectedId: openId,
+        rowClass: function (r) { return r.moved_since_test ? 'reg-moved' : ''; },
+        onRow: function (r) {
+          location.hash = '#/regression/' + encodeURIComponent(r.h1_id) + hashQuery();
+        }
+      }));
+
+      host.appendChild(el('div', { class: 'tiny dim pane-body', text:
+        items.length + ' of ' + data.counts.all + ' resolved reports  |  ' +
+        data.counts.untested + ' never retested  |  ' + data.counts.broken + ' fixes broken' }));
+
+      if (openId) drawPane();
+    }
+
+    /* ------------------------------------------------------------- detail --- */
+    function drawPane() {
+      clear(paneHost);
+      var wrap = el('section', { class: 'card pane' });
+      paneHost.appendChild(wrap);
+      append(wrap, loading('Loading the report...'));
+
+      api('/regression/' + encodeURIComponent(openId)).then(function (r) {
+        clear(wrap);
+        wrap.appendChild(el('div', { class: 'pane-head' }, [
+          el('h2', { text: '#' + r.h1_id + '  ' + (r.title || '') }),
+          el('div', { class: 'pane-actions' }, [
+            copyButton(function () { return String(r.h1_id); }, 'Copy report ID'),
+            /* Built here rather than through extLink, which returns a bare anchor: this one sits
+               in a row of buttons and has to carry the button classes to match them. safeURL is
+               still what decides the href is safe to follow. */
+            safeURL(r.url) ? el('a', {
+              class: 'btn btn-sm', href: safeURL(r.url),
+              target: '_blank', rel: 'noopener noreferrer', text: 'Open on HackerOne'
+            }) : null,
+            el('a', {
+              class: 'btn btn-sm', text: 'Open in Tracker',
+              href: '#/reports?' + qsFrom({ q: r.h1_id, program: ALL_PROGRAMS })
+            }),
+            el('a', {
+              class: 'btn btn-sm btn-quiet', text: 'Close',
+              href: '#/regression' + hashQuery()
+            })
+          ].filter(Boolean))
+        ]));
+
+        var body = el('div', { class: 'pane-body' });
+        wrap.appendChild(body);
+
+        body.appendChild(metaGrid([
+          ['Program', r.program || '-'],
+          ['Asset', r.asset || '-', 'mono'],
+          ['Weakness', r.weakness || r.cwe || '-'],
+          ['Severity', r.severity || '-'],
+          ['Fixed on', r.resolved_on || '-'],
+          ['Due', (r.due_on || '-') + (r.snoozed ? '  (snoozed)' : '')],
+          ['Retests', String(r.attempts || 0) +
+                      (r.last_tested ? ', last ' + r.last_tested : ', never')],
+          ['Bounty', r.bounty ? String(r.bounty) : '-']
+        ]));
+
+        if (r.moved_since_test) {
+          body.appendChild(el('div', { class: 'alert alert-warn' }, [
+            el('strong', { class: 'alert-title', text: 'Moved since your retest. ' }),
+            'HackerOne recorded activity on this report after ' + r.last_tested +
+            ', so the verdict below describes the report as it stood before that. Re-read the ' +
+            'thread before trusting it.'
+          ]));
+        }
+
+        body.appendChild(regressionActions(r));
+
+        if (r.note) {
+          body.appendChild(el('div', { class: 'pane-label', text: 'Retest note' }));
+          body.appendChild(el('div', { class: 'md' }, el('p', { text: r.note })));
+        }
+
+        if (r.lead_path) {
+          body.appendChild(el('div', { class: 'form-actions' }, [
+            el('span', { class: 'tiny dim', text: 'Lead drafted: ' }),
+            el('a', {
+              class: 'btn btn-sm', text: 'Open in Files',
+              href: '#/files?' + qsFrom({
+                path: r.lead_path.replace(/\/[^/]*$/, ''), file: r.lead_path
+              })
+            })
+          ]));
+        }
+
+        /* The original report, then the thread. In that order because the thread only makes sense
+           once you have re-read what was claimed - and the thread is where the program said what
+           it changed, which is the paragraph the retest is planned from. */
+        if (r.body) {
+          body.appendChild(el('div', { class: 'pane-label', text: 'The original report' }));
+          body.appendChild(mdBlock(String(r.body)));
+        }
+        var thread = threadPanel({ thread: JSON.stringify(r.thread || []) });
+        if (thread) body.appendChild(thread);
+      }).catch(function (err) {
+        clear(wrap);
+        append(wrap, el('div', { class: 'pane-body' }, errorPanel(err, drawPane)));
+      });
+    }
+
+    /* --------------------------------------------------------- the actions --- */
+    function regressionActions(r) {
+      var panel = el('div', { class: 'workpanel' });
+      var busy = false;
+
+      function post(path, payload, okMsg) {
+        if (busy) return;
+        busy = true;
+        api('/regression/' + encodeURIComponent(r.h1_id) + path, {
+          method: 'POST', body: payload
+        }).then(function () {
+          toast(okMsg, 'ok');
+          busy = false;
+          /* load() alone: it re-fetches the queue, and draw() re-opens the pane when a row is
+             selected. Calling drawPane() here as well would fetch the detail twice per click. */
+          load();
+        }).catch(function (err) { busy = false; toastError(err); });
+      }
+
+      var note = el('textarea', {
+        rows: 2, spellcheck: 'true',
+        placeholder: 'What the retest actually did - the request you replayed and what came back.',
+        value: r.note || ''
+      });
+
+      panel.appendChild(el('div', { class: 'pane-label', text: 'Record a retest' }));
+      panel.appendChild(el('label', { class: 'field grow' }, [
+        el('span', { class: 'field-label', text: 'Note' }), note
+      ]));
+
+      var verdicts = el('div', { class: 'form-actions' }, ['holds', 'broken', 'skipped'].map(
+        function (v) {
+          return el('button', {
+            class: 'btn btn-sm' + (v === 'broken' ? ' btn-danger' : '') +
+                   (r.verdict === v ? ' active' : ''),
+            type: 'button', title: REGRESSION_VERDICT_HINT[v],
+            text: v === 'holds' ? 'Fix holds' : (v === 'broken' ? 'Fix broken' : 'Skip'),
+            onclick: function () {
+              post('/verdict', { verdict: v, note: note.value },
+                   'Recorded: ' + v);
+            }
+          });
+        }));
+      if (r.verdict !== 'pending') {
+        verdicts.appendChild(el('button', {
+          class: 'btn btn-sm btn-quiet', type: 'button', text: 'Clear verdict',
+          title: REGRESSION_VERDICT_HINT.pending,
+          onclick: function () {
+            post('/verdict', { verdict: 'pending', note: note.value }, 'Verdict cleared');
+          }
+        }));
+      }
+      panel.appendChild(verdicts);
+
+      /* Drafting the lead is offered ONLY on a broken fix, matching the server, and the button
+         says why it is disabled rather than being absent - "how do I turn this into a lead" is
+         the question this tab exists to answer. */
+      var canDraft = r.verdict === 'broken' && !r.lead_path;
+      var targetSel = selectEl([{ value: '', label: 'Pick a workspace...' }], '', null);
+      api('/targets?limit=500').then(function (d) {
+        clear(targetSel);
+        targetSel.appendChild(el('option', { value: '', text: 'Pick a workspace...' }));
+        ((d && d.items) || []).forEach(function (t) {
+          targetSel.appendChild(el('option', { value: t.slug, text: t.slug }));
+        });
+      }).catch(function () { /* the draft button reports its own failure */ });
+
+      panel.appendChild(el('div', { class: 'pane-label', text: 'Draft the bypass lead' }));
+      panel.appendChild(el('div', { class: 'form-actions' }, [
+        field('Workspace', targetSel),
+        el('button', {
+          class: 'btn btn-sm btn-primary', type: 'button', text: 'Draft lead',
+          disabled: !canDraft,
+          title: r.lead_path ? 'A lead has already been drafted for this fix.'
+               : (canDraft ? 'Write a pre-filled lead into the workspace and index it.'
+                           : 'Record a "Fix broken" verdict first - a lead states that a fix failed.'),
+          onclick: function () {
+            if (!targetSel.value) { toast('Pick a workspace first.', 'err'); return; }
+            post('/lead', { target: targetSel.value }, 'Lead drafted into ' + targetSel.value);
+          }
+        })
+      ]));
+
+      /* Snooze is deliberately below the verdicts and quieter: it is the action you take when you
+         are NOT going to look, and making it as prominent as recording a result would be an
+         invitation to keep pushing the queue away. */
+      panel.appendChild(el('div', { class: 'form-actions' }, [
+        el('span', { class: 'tiny dim', text: 'Not yet: ' }),
+        el('button', {
+          class: 'btn btn-sm btn-quiet', type: 'button', text: '+7 days',
+          onclick: function () { post('/snooze', { days: 7 }, 'Snoozed 7 days'); }
+        }),
+        el('button', {
+          class: 'btn btn-sm btn-quiet', type: 'button', text: '+30 days',
+          onclick: function () { post('/snooze', { days: 30 }, 'Snoozed 30 days'); }
+        }),
+        r.snoozed ? el('button', {
+          class: 'btn btn-sm btn-quiet', type: 'button', text: 'Clear snooze',
+          onclick: function () { post('/snooze', { clear: true }, 'Snooze cleared'); }
+        }) : null
+      ].filter(Boolean)));
+
+      return panel;
+    }
+
+    load();
+  }
+
   /* ================================================================= router */
 
   /* ============================================================ certificates */
@@ -7324,6 +7771,10 @@
     { view: 'dashboard', label: 'Dashboard' },
     { view: 'leads', label: 'Leads' },
     { view: 'reports', label: 'Tracker' },
+    /* Directly under the Tracker because it is the Tracker's back half: the same reports, after
+       they closed. Its rail glyph is R, which Reports does not take - that tab is labelled
+       Tracker. */
+    { view: 'regression', label: 'Regression' },
     { view: 'advisories', label: 'Advisories' },
     { view: 'programs', label: 'Programs' },
     { view: 'targets', label: 'Targets' },
@@ -7363,6 +7814,7 @@
     dashboard: function (root) { dashboardView(root); },
     leads: function (root, ctx) { entityListView(root, ENTITIES.leads, ctx); },
     reports: function (root, ctx) { entityListView(root, ENTITIES.reports, ctx); },
+    regression: function (root, ctx) { regressionView(root, ctx); },
     advisories: function (root, ctx) { entityListView(root, ENTITIES.advisories, ctx); },
     programs: function (root, ctx) { programsView(root, ctx); },
     targets: function (root, ctx) { targetsView(root, ctx); },
