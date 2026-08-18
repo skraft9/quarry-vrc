@@ -4432,12 +4432,10 @@
 
   function dashboardView(root) {
     root.appendChild(el('div', { class: 'page-head' }, [
-      /* Title + one-line subtitle, matching the mockup's dashboard head. No action buttons:
+      /* Title only, no description subtitle. No action buttons:
          search lives in the topbar and Status is a nav row, so the head stays clean. */
       el('div', {}, [
-        el('h1', { class: 'page-title', text: 'Dashboard' }),
-        el('p', { class: 'page-sub',
-          text: 'Overview of your research activity and bounty performance.' })
+        el('h1', { class: 'page-title', text: 'Dashboard' })
       ])
     ]));
 
@@ -6151,12 +6149,7 @@
 
     root.appendChild(el('div', { class: 'page-head' }, [
       el('div', {}, [
-        el('h1', { class: 'page-title', text: 'Regression' }),
-        el('p', {
-          class: 'page-sub',
-          text: 'The fixes shipped for your resolved reports, and what a retest found. ' +
-                'Derived from the Tracker; makes no HackerOne request.'
-        })
+        el('h1', { class: 'page-title', text: 'Regression' })
       ])
     ]));
 
