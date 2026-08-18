@@ -7376,8 +7376,11 @@
           });
       });
 
-      syncBtn.addEventListener('click', function () {
-        if (busy) return;
+      // Render the progress bar into outHost and poll to completion. Defined here so BOTH a fresh
+      // click AND a re-mount (navigating back to Integrations mid-sync) drive the same bar. The
+      // document.contains guard lets a stale loop from a previous mount stop once its bar is
+      // detached, so a freshly re-attached bar takes over cleanly.
+      function attachSyncProgress() {
         busy = true;
         syncBtn.disabled = true;
         testBtn.disabled = true;
@@ -7385,13 +7388,14 @@
         clear(outHost);
 
         var barFill = el('div', { class: 'int-bar-fill' });
-        var barLabel = el('div', { class: 'int-bar-label', text: 'Starting the sync…' });
+        var barLabel = el('div', { class: 'int-bar-label', text: 'Syncing…' });
         append(outHost, el('div', { class: 'int-progress' }, [
           barLabel,
           el('div', { class: 'int-bar' }, [barFill]),
           el('div', { class: 'int-bar-note',
                       text: 'The list carries no bounty or CVSS, so each report is fetched ' +
-                            'individually. A full run takes about a minute; you can leave this page.' })
+                            'individually. A full run takes about a minute; you can leave this page ' +
+                            'and come back, the progress follows.' })
         ]));
 
         function reset() {
@@ -7425,8 +7429,10 @@
         }
 
         function poll() {
+          if (!document.body.contains(barFill)) { return; }   // this bar was replaced; let it die
           api('/integrations/hackerone/sync/status', { method: 'GET' })
             .then(function (st) {
+              if (!document.body.contains(barFill)) { return; }
               st = st || {};
               var total = st.total || 0, d = st.done || 0;
               if (st.phase === 'listing' || total === 0) {
@@ -7451,10 +7457,24 @@
             .catch(function () { setTimeout(poll, 1500); });   // transient blip: keep polling
         }
 
+        poll();
+      }
+
+      syncBtn.addEventListener('click', function () {
+        if (busy) return;
+        busy = true;
+        syncBtn.disabled = true;
+        testBtn.disabled = true;
+        syncBtn.textContent = 'Syncing…';
+        clear(outHost);
+        append(outHost, el('div', { class: 'int-progress' }, [loading('Starting the sync…')]));
         api('/integrations/hackerone/sync', { method: 'POST', body: {} })
-          .then(function () { poll(); })
+          .then(function () { attachSyncProgress(); })
           .catch(function (err) {
-            reset();
+            busy = false;
+            syncBtn.disabled = false;
+            testBtn.disabled = false;
+            syncBtn.textContent = 'Sync now';
             clear(outHost);
             append(outHost, errorPanel(err));
             toastError(err);
@@ -7468,6 +7488,14 @@
           ? 'A full sync is roughly 220 requests and takes about a minute.'
           : 'Store a credential first.' })
       ]);
+
+      // If a sync is already running when this card (re)mounts, re-attach the bar so the status
+      // survives navigating away and back for the whole duration of the sync.
+      if (configured) {
+        api('/integrations/hackerone/sync/status', { method: 'GET' })
+          .then(function (st) { if (st && st.running) { attachSyncProgress(); } })
+          .catch(function () {});
+      }
     }
 
     /* ------------------------------------------------------------ form --- */
