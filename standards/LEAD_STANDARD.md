@@ -23,6 +23,35 @@ open ---> confirmed ---> ready ---> submitted ---> awarded
 
 **A kill records what would bring it back.** "Not exploitable" is nearly worthless six months on; "inert only because the current browser refuses `javascript:` in `window.open` - revives if a different browser behaves differently" is a lead someone can pick up. Where a whole surface died for one reason, one lead covering that surface is right; do not write ten files where one says it.
 
+## Record a lead against the LATEST version of the target, never a stale checkout
+
+**Before you record a lead, confirm the source tree is at the newest version of the target** -
+not whatever tag happened to be checked out, the newest. What counts as newest is whatever the
+hunt is scoped to at its tip: the latest released tag on the line you are hunting, or the head of
+the active release branch or `main` when the scope is deliberately unreleased code. Either way it
+is the newest available, verified rather than assumed.
+
+Check it, do not trust the working directory:
+
+```
+git -C <src> describe --tags                                    # what is checked out
+git -C <src> ls-remote --tags --refs origin \
+  | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -3      # what the newest tags actually are
+```
+
+If the checkout is behind, update it (`git fetch`, then check out the latest tag or branch head)
+and RE-VERIFY the finding on the latest code before you write the lead. A defect found on old code
+is worthless twice over: it may already be patched on the current version, which makes the lead a
+dupe the moment it is filed - recency of the CODE is the dominant dedup signal, not recency of an
+advisory - and hunting the stale tree entirely misses the code that exists only on the newest
+version, where the fresh bugs and the thinnest prior-report population both live. Even one patch
+release behind is enough: the delta between two adjacent releases is precisely the code least
+likely to have been read by anyone yet.
+
+The `Version` row records the exact version hunted and the `Source` row records the exact commit,
+so a reader can tell at a glance what code the lead stands on. Fill both from the verified
+checkout, not from memory.
+
 ## The header block IS A TABLE
 
 The header is a two-column table. It lines the labels up and is scannable in one pass, where a run of `Label: value` lines renders as a ragged bullet list.
