@@ -742,15 +742,33 @@ before relying on them.
 
 ### 7.3 The incremental poller and events
 
-Quarry can run an incremental poller that watches HackerOne for changes (state transitions, bounty
+Quarry runs an incremental poller that watches HackerOne for changes (state transitions, bounty
 awards, severity changes, collaborators) and records them as events. Those events drive the
-Dashboard's New/Updated badges and the money-landed deltas.
+Tracker's moved badges, the Dashboard's New/Updated badges, and the money-landed deltas, so the
+Tracker stays current between full `--sync` runs at a cost of only a few requests per poll. A full
+sync is ~150 requests and is the wrong thing to run every few minutes; the poll uses the four change
+signals the list endpoint returns for free and detail-fetches only the reports whose signals moved.
 
 - Endpoints: `GET /api/h1/job` (poller health), `GET /api/h1/events` (recent changes),
   `POST /api/h1/events/seen`, `POST /api/h1/poll` (run one poll now, with `force` to skip backoff).
-- **This build detail:** the poller is provided by an optional module. If it is not present in your
-  image, these endpoints return `503 module unavailable` and the badges/deltas read as zero; the
-  full `--sync` in [7.1](#71-the-api-token-sync-and-submit) still keeps the Tracker current.
+- Run one poll by hand from the **Status** tab's **Poll now** button, or from the CLI:
+
+  ```bash
+  docker compose exec quarry python3 core/h1_watch.py --poll
+  ```
+
+**Run it on a schedule.** The container does not schedule the poll for you, so add a cron entry on
+the host. From the directory that holds your `docker-compose.yml`, run `crontab -e` and add:
+
+```cron
+# every 15 minutes; --quiet prints nothing on success, so an empty log is the healthy case
+*/15 * * * * cd /path/to/quarry-vrc && docker compose exec -T quarry python3 core/h1_watch.py --poll --quiet >> h1-cron.log 2>&1
+```
+
+The `-T` disables the pseudo-TTY so it runs headless under cron. The **Status** tab's Incremental
+Poll card then reads healthy and shows the last run, the cumulative request count, and how many
+changes are unread. Poll activity is recorded in the app and the Audit log, not in that log file, so
+an empty `h1-cron.log` is the expected, healthy state.
 
 ---
 
