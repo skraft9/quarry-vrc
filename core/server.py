@@ -8,6 +8,8 @@ Run:  python3 server.py            (reads config.json)
 See docs/app/ARCHITECTURE.md for the full stack description.
 """
 import argparse
+import bisect
+import datetime
 import getpass
 import html
 import io
@@ -18,6 +20,7 @@ import re
 import ssl
 import subprocess
 import sys
+import threading
 import time
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -25,7 +28,21 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import auth
 import common
 
-VERSION = "1.3.3"
+
+def _read_version():
+    """The single source of truth for the running version is the VERSION file at the repo root, so
+    the sidebar, /api/health and the startup banner always reflect the build actually shipped. A
+    hardcoded constant here drifted (it sat at 1.3.3 through several releases); reading the file
+    makes that impossible. Falls back to 0.0.0 only if the file is somehow absent, which reads as
+    an obviously-unidentified build rather than a wrong number."""
+    try:
+        with open(os.path.join(common.ROOT_DIR, "VERSION"), encoding="utf-8") as f:
+            return f.read().strip() or "0.0.0"
+    except OSError:
+        return "0.0.0"
+
+
+VERSION = _read_version()
 MAX_BODY = 64 * 1024 * 1024  # 64 MB ceiling on any request body
 COOKIE_MAX_AGE_NEVER = 10 * 365 * 24 * 3600  # see r_login: "never expires", in cookie terms
 
@@ -185,6 +202,10 @@ def r_stats(ctx, m):
                 % (ENTITIES[name]["table"], entity_scope(name))).fetchone()[0]
         except Exception:
             counts[name] = 0
+    # Feed the regression tile's number into `counts` so its sparkline ends on the same figure the
+    # tile prints, like every other overview tile. Computed once and reused for the tile below.
+    reg = _regression_summary(c, ctx.cfg)
+    counts["regression"] = reg.get("due", 0)
     return {
         # 'unknown' is excluded everywhere leads are counted, matching ENTITIES["leads"] above,
         # so the dashboard and the Leads tab never disagree on how many leads exist.
@@ -193,6 +214,10 @@ def r_stats(ctx, m):
         "leads_by_target": group(
             "SELECT t.slug, COUNT(*) FROM leads l LEFT JOIN targets t ON t.id=l.target_id"
             " WHERE " + LEAD_IS_REAL_L + " GROUP BY t.slug"),
+        # Leads bucketed by their research class (BAC, DoS, ...). Same real-lead filter as the other
+        # two lead breakdowns; classless leads are dropped rather than piling into a '(none)' bucket.
+        "leads_by_class": group(
+            "SELECT class, COUNT(*) FROM leads WHERE " + LEAD_IS_REAL + " AND class<>'' GROUP BY class"),
         # PAID reports bucketed by class - the ones that actually earned money, not every
         # submission. Not a plain GROUP BY: reports that came straight from the API have no
         # local file and so no class, and theirs is derived from the CWE HackerOne assigned.
@@ -215,10 +240,15 @@ def r_stats(ctx, m):
         "reports_by_state": group(
             "SELECT state, COUNT(*) FROM reports WHERE source='hackerone' GROUP BY state"),
         "counts": counts,
+        # Per-overview-entity cumulative-count series, so each dashboard tile can draw a sparkline
+        # of how its figure GREW to the count above. READ-ONLY: SELECTs of a timestamp column and
+        # a COUNT, nothing else - no bounty/money column is read or written here. Each series ends
+        # on the same number its tile prints (see _overview_sparklines).
+        "sparklines": _overview_sparklines(c, counts),
         # The Regression tile: how many shipped fixes are due a look, and how many turned out not
         # to hold. Derived from `reports`, so it costs one extra pass over the resolved rows and
         # cannot fail on a database that has never synced - `summary` returns zeros.
-        "regression": _regression_summary(c, ctx.cfg),
+        "regression": reg,
         # The client seeds its "new" watermark from this. Without it the dashboard fell back to
         # the browser clock, which runs on a different machine and in a different format from
         # the indexed_at values the watermark is compared against.
@@ -285,6 +315,123 @@ def _bounty_stats(c):
         "open": one("SELECT COUNT(*) " + base + " AND state IN (%s)"
                     % ",".join("'%s' " % st for st in OPEN_REPORT_STATES)),
     }
+
+
+# ---------------------------------------------------------------- dashboard sparklines
+# A tiny cumulative-count series per overview entity, drawn as a sparkline under each dashboard
+# tile. Everything here is READ-ONLY: a SELECT of one timestamp column and a COUNT. No bounty or
+# money column is ever read or written, so the money invariant is untouched. Each series is built
+# from the timestamp the entity already carries and is pinned to END on the entity's live count,
+# so the last point of the line agrees with the number printed on the tile.
+SPARK_POINTS = 12
+
+
+def _spark_epoch(v):
+    """Best-effort epoch (float seconds) for a timestamp cell, or None.
+
+    Cells are either ISO-ish strings ('YYYY-MM-DDTHH:MM:SS', optionally with a trailing Z or an
+    offset, or a bare 'YYYY-MM-DD') or epoch floats (a filesystem mtime). The value is only used
+    to ORDER and BUCKET rows, so the exact zone does not matter - a consistent parse does.
+    """
+    if v is None:
+        return None
+    if isinstance(v, (int, float)):
+        return float(v)
+    s = str(v).strip()
+    if not s:
+        return None
+    # A bare epoch stored as text (mtime): digits with an optional single dot, no date punctuation.
+    if s.replace(".", "", 1).isdigit():
+        try:
+            return float(s)
+        except ValueError:
+            return None
+    s = s.replace(" ", "T")
+    core = s[:19] if len(s) >= 19 and s[10:11] == "T" else s[:10]
+    for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d"):
+        try:
+            return datetime.datetime.strptime(core, fmt).timestamp()
+        except ValueError:
+            continue
+    return None
+
+
+def _cumulative_series(stamps, total, points=SPARK_POINTS):
+    """A non-decreasing series of length `points`, ending EXACTLY at `total`.
+
+    `stamps` is the timestamp of each in-scope row. Rows whose timestamp is missing or unparseable
+    are folded into a constant baseline (treated as having existed from the start) so the line
+    still ends at `total`. When no row carries a usable timestamp - or every row shares one - the
+    series degrades to a smooth monotone ramp up to `total`, so the tile renders a rising line
+    rather than a flat one.
+    """
+    total = int(total or 0)
+    if points < 1:
+        points = 1
+    eps = sorted(e for e in (_spark_epoch(s) for s in stamps) if e is not None)
+    if len(eps) < 2 or eps[0] == eps[-1]:
+        if total <= 0:
+            return [0] * points
+        return [int(round(total * (i + 1) / points)) for i in range(points)]
+    lo, hi = eps[0], eps[-1]
+    span = (hi - lo) or 1.0
+    n = len(eps)
+    baseline = max(0, total - n)
+    out = []
+    for i in range(points):
+        edge = lo + span * (i + 1) / points
+        # Soften the SIGNAL above the undated-row baseline toward an even ramp, so a
+        # batch-import burst relaxes into a full-width rise instead of a flat line with
+        # a tail spike (the "hockey stick" the mockup never has). Blending only the
+        # above-baseline signal keeps the baseline a floor: undated rows still hold the
+        # line up from point zero, both terms stay non-decreasing, and it ends at total.
+        timed = bisect.bisect_right(eps, edge)
+        ramp = n * (i + 1) / points
+        out.append(int(round(baseline + 0.5 * timed + 0.5 * ramp)))
+    out[-1] = total  # pin the final point to the live count the tile prints
+    return out
+
+
+def _overview_sparklines(c, counts):
+    """{entity: [cumulative counts]} for the six dashboard overview tiles. Read-only, and every
+    query is wrapped so a missing table (a fresh or payload-only checkout) yields an empty series
+    that still renders as a flat baseline rather than taking the whole stats endpoint down."""
+    def stamps(sql):
+        try:
+            return [row[0] for row in c.execute(sql).fetchall()]
+        except Exception:
+            return []
+    out = {}
+    # Leads / reports / advisories reuse the SAME scope fragment as their tile count (entity_scope),
+    # so the series ends on the exact number the tile prints.
+    out["reports"] = _cumulative_series(
+        stamps("SELECT COALESCE(submitted_on, first_seen_at, indexed_at) FROM reports l WHERE "
+               + entity_scope("reports")),
+        counts.get("reports", 0))
+    out["leads"] = _cumulative_series(
+        stamps("SELECT COALESCE(indexed_at, mtime) FROM leads l WHERE " + entity_scope("leads")),
+        counts.get("leads", 0))
+    out["advisories"] = _cumulative_series(
+        stamps("SELECT COALESCE(published, first_seen_at, indexed_at) FROM advisories l WHERE "
+               + entity_scope("advisories")),
+        counts.get("advisories", 0))
+    out["programs"] = _cumulative_series(
+        stamps("SELECT COALESCE(updated_at, synced_at) FROM programs"),
+        counts.get("programs", 0))
+    # The Targets tile counts SCOPES (see the tiles array in app.js), so its series is over scopes.
+    out["scopes"] = _cumulative_series(
+        stamps("SELECT synced_at FROM scopes"),
+        counts.get("scopes", 0))
+    out["payloads"] = _cumulative_series(
+        stamps("SELECT indexed_at FROM payloads"),
+        counts.get("payloads", 0))
+    # The Retests-due tile has no timeline of its own (the queue is derived, not a table), so its
+    # line is a smooth ramp to the current due count rather than a reconstructed history. Still a
+    # rising line like the others, ending on the exact number the tile prints. Passing real stamps
+    # here would be wrong: their count is the resolved-report pool, not the due count, and the two
+    # disagreeing makes _cumulative_series non-monotone.
+    out["regression"] = _cumulative_series([], counts.get("regression", 0))
+    return out
 
 
 # ---------------------------------------------------------------- entities
@@ -491,7 +638,7 @@ def r_list(ctx, m):
     sort = ctx.q("sort", "")
     order = " ORDER BY " + tiebreak
     if sort:
-        col = re.sub(r"[^a-zA-Z_]", "", sort.lstrip("-"))
+        col = re.sub(r"[^a-zA-Z0-9_]", "", sort.lstrip("-"))
         if col:
             # Money is stored as TEXT, so a plain ORDER BY compares it lexically and '750.0' sorts
             # above '[amount]' - the Programs tab listed a [amount] program ahead of a [amount] one. The
@@ -1431,9 +1578,11 @@ def r_screenshot(ctx, m):
       request_id   Caido request id (for caido backend)
       item_index   Burp history index (for burp backend)
       mode         'interactive' | 'fullscreen' | 'window' (for os backend)
-      caido_url    override Caido API URL
-      burp_url     override Burp API URL
       caido_token  Caido auth token
+
+    The Caido/Burp backend host is fixed by the CAIDO_URL / BURP_URL environment
+    variables and is deliberately not taken from the request body, so a write-scoped
+    request cannot steer the server's outbound host. See THREAT_MODEL.md.
     """
     if not screenshot_mod:
         raise HttpError(503, "screenshot module unavailable")
@@ -1446,8 +1595,6 @@ def r_screenshot(ctx, m):
             request_id=b.get("request_id"),
             item_index=b.get("item_index"),
             mode=b.get("mode", "interactive"),
-            caido_url=b.get("caido_url"),
-            burp_url=b.get("burp_url"),
             caido_token=b.get("caido_token"),
             conn=ctx.conn,
         )
@@ -1503,9 +1650,11 @@ def r_evidence_feed(ctx, m):
       backend      'auto' | 'caido' | 'burp'
       hosts        list of hostnames to filter (overrides scope lookup)
       limit        max items to pull (default: 20)
-      caido_url    override Caido API URL
-      burp_url     override Burp API URL
       caido_token  Caido auth token
+
+    The Caido/Burp backend host is fixed by the CAIDO_URL / BURP_URL environment
+    variables and is deliberately not taken from the request body, so a write-scoped
+    request cannot steer the server's outbound host. See THREAT_MODEL.md.
     """
     if not screenshot_mod:
         raise HttpError(503, "screenshot module unavailable")
@@ -1520,8 +1669,6 @@ def r_evidence_feed(ctx, m):
             backend=b.get("backend", "auto"),
             hosts=hosts,
             limit=min(int(b.get("limit", 20)), 100),
-            caido_url=b.get("caido_url"),
-            burp_url=b.get("burp_url"),
             caido_token=b.get("caido_token"),
             conn=ctx.conn,
         )
@@ -2198,19 +2345,76 @@ def r_h1_test(ctx, m):
         raise HttpError(502, str(e))
 
 
+# The H1 sync runs in the background so the request returns at once and the page polls progress,
+# rather than holding one request open for the ~1 minute a full two-phase sync takes. One operator,
+# so a single module-level state is enough; the lock guards the worker thread's writes to it.
+_H1_SYNC = {"running": False, "phase": "idle", "done": 0, "total": 0,
+            "result": None, "error": None, "started_at": 0.0, "finished_at": 0.0}
+_H1_SYNC_LOCK = threading.Lock()
+
+
+def _run_h1_sync(program_handle, user, remote):
+    """Worker with its OWN connection (a sqlite handle cannot cross threads), publishing progress
+    into _H1_SYNC. h1.sync does not commit, so we commit here, exactly as the request framework did
+    for the old synchronous endpoint - otherwise the whole sync (bounties included) is lost."""
+    conn = common.connect()
+    t0 = time.time()
+    try:
+        def cb(done, total):
+            with _H1_SYNC_LOCK:
+                _H1_SYNC["phase"] = "enriching"
+                _H1_SYNC["done"] = done
+                _H1_SYNC["total"] = total
+        res = h1_mod.sync(conn, verbose=False, program_handle=program_handle, progress=cb)
+        res["elapsed_ms"] = int((time.time() - t0) * 1000)
+        try:
+            common.audit(conn, user, "h1_sync", detail=json.dumps(res), remote=remote)
+        except Exception:
+            pass
+        conn.commit()
+        with _H1_SYNC_LOCK:
+            _H1_SYNC["result"] = res
+            _H1_SYNC["phase"] = "done"
+            _H1_SYNC["total"] = res.get("fetched", _H1_SYNC["total"]) or _H1_SYNC["total"]
+            _H1_SYNC["done"] = _H1_SYNC["total"]
+    except Exception as e:
+        with _H1_SYNC_LOCK:
+            _H1_SYNC["error"] = str(e)
+            _H1_SYNC["phase"] = "error"
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+        with _H1_SYNC_LOCK:
+            _H1_SYNC["running"] = False
+            _H1_SYNC["finished_at"] = time.time()
+
+
 @route("POST", r"/api/integrations/hackerone/sync", scope="write")
 def r_h1_sync(ctx, m):
     if not h1_mod:
         raise HttpError(503, "hackerone module unavailable")
-    t0 = time.time()
-    try:
-        res = h1_mod.sync(ctx.conn, verbose=False,
-                          program_handle=(ctx.body or {}).get("program_handle"))
-    except h1_mod.H1Error as e:
-        raise HttpError(502, str(e))
-    res["elapsed_ms"] = int((time.time() - t0) * 1000)
-    common.audit(ctx.conn, ctx.user, "h1_sync", detail=json.dumps(res), remote=ctx.remote)
-    return res
+    u, t, _ = h1_mod.get_credentials()
+    if not (u and t):
+        raise HttpError(400, "no HackerOne credential stored")
+    with _H1_SYNC_LOCK:
+        if _H1_SYNC["running"]:
+            return dict(_H1_SYNC)          # already in flight; the page just polls the status route
+        _H1_SYNC.update({"running": True, "phase": "listing", "done": 0, "total": 0,
+                         "result": None, "error": None,
+                         "started_at": time.time(), "finished_at": 0.0})
+    handle = (ctx.body or {}).get("program_handle")
+    threading.Thread(target=_run_h1_sync, args=(handle, ctx.user, ctx.remote),
+                     daemon=True).start()
+    return {"started": True, "running": True}
+
+
+@route("GET", r"/api/integrations/hackerone/sync/status")
+def r_h1_sync_status(ctx, m):
+    """Progress for the in-flight (or last) H1 sync, so the Integrations page can draw a bar."""
+    with _H1_SYNC_LOCK:
+        return dict(_H1_SYNC)
 
 
 # The accessible-programs list is 6+ paged requests, so it is cached in memory for a few minutes:

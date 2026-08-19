@@ -742,15 +742,38 @@ before relying on them.
 
 ### 7.3 The incremental poller and events
 
-Quarry can run an incremental poller that watches HackerOne for changes (state transitions, bounty
+Quarry runs an incremental poller that watches HackerOne for changes (state transitions, bounty
 awards, severity changes, collaborators) and records them as events. Those events drive the
-Dashboard's New/Updated badges and the money-landed deltas.
+Tracker's moved badges, the Dashboard's New/Updated badges, and the money-landed deltas, so the
+Tracker stays current between full `--sync` runs at a cost of only a few requests per poll. A full
+sync is ~150 requests and is the wrong thing to run every few minutes; the poll uses the four change
+signals the list endpoint returns for free and detail-fetches only the reports whose signals moved.
 
 - Endpoints: `GET /api/h1/job` (poller health), `GET /api/h1/events` (recent changes),
   `POST /api/h1/events/seen`, `POST /api/h1/poll` (run one poll now, with `force` to skip backoff).
-- **This build detail:** the poller is provided by an optional module. If it is not present in your
-  image, these endpoints return `503 module unavailable` and the badges/deltas read as zero; the
-  full `--sync` in [7.1](#71-the-api-token-sync-and-submit) still keeps the Tracker current.
+- Run one poll by hand from the **Status** tab's **Poll now** button, or from the CLI:
+
+  ```bash
+  docker compose exec quarry python3 core/h1_watch.py --poll
+  ```
+
+**It runs automatically.** The container polls on a built-in timer, every **15 minutes** by default,
+so the Tracker's live monitoring works out of the box with nothing to set up. Tune or disable it
+with an environment variable in your `.env` or compose file:
+
+```env
+QUARRY_POLL_MINUTES=15   # interval in minutes; 0 turns the built-in timer off
+```
+
+The **Status** tab's Incremental Poll card then reads healthy and shows the last run, the cumulative
+request count, and how many changes are unread. Poll activity is recorded in the app and the Audit
+log, not in a file, so the `h1-cron.log` it writes stays empty on success (the poll runs `--quiet`).
+
+If you would rather run your own scheduler, set `QUARRY_POLL_MINUTES=0` and add a host cron:
+
+```cron
+*/15 * * * * cd /path/to/quarry-vrc && docker compose exec -T quarry python3 core/h1_watch.py --poll --quiet >> h1-cron.log 2>&1
+```
 
 ---
 

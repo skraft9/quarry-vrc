@@ -157,6 +157,8 @@ button on the Security tab), which is enabled on this repo and described in the 
 about the report goes in a public issue, PR, branch or commit until the fix and its advisory publish
 together.
 
+**Write to them like a person, not a legal department.** This is a solo open-source project, so every reply to a reporter - an acknowledgement, a request for detail, and above all a close - is a maintainer talking to a fellow developer: warm, direct, lightly formal, never a courtroom transcript. Closing something as out of scope or accepted-by-design is where tone matters most: give the real reason plainly, name the boundary and the exact condition that would put it back in scope, credit any hardening their report prompted, and thank them like you mean it. The substance still goes on record (the reason, per the "no finding without a written reason" rule); it is the stiffness that goes. The goal is a researcher who still wants to look at the code next month, not one who feels brushed off.
+
 1. **Acknowledge receipt.** Tell the reporter it is received and being looked at, and keep it
    embargoed: nothing about it goes in a public issue, PR, branch or commit yet.
 2. **Triage, validate and dupe-check.** Reproduce it, establish the affected versions, and decide
