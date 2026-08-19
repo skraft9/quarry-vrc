@@ -29,10 +29,12 @@ function grab(name) {
 const sandbox = 'var sparkSeq = 0;\n'
   + grab('spark') + '\n'
   + grab('meterPct') + '\n'
-  + 'return { spark: spark, meterPct: meterPct };';
+  + grab('normalizeListMode') + '\n'
+  + 'return { spark: spark, meterPct: meterPct, normalizeListMode: normalizeListMode };';
 const api = (new Function(sandbox))();
 const spark = api.spark;
 const meterPct = api.meterPct;
+const normalizeListMode = api.normalizeListMode;
 
 let pass = 0, fail = 0;
 function t(name, cond, got) {
@@ -121,6 +123,21 @@ console.log('\n-- meterPct(): real ratios + clamp --');
     [[0, 5], [1, 5], [5, 5], [9, 5], [128, 14]].every(function (p) {
       const v = meterPct(p[0], p[1]); return v >= 0 && v <= 100;
     }));
+}
+
+console.log('\n-- normalizeListMode(): card is the default, anything else is coerced --');
+{
+  t('stored "list" stays list', normalizeListMode('list') === 'list');
+  t('stored "cards" is cards', normalizeListMode('cards') === 'cards');
+  t('null (never set) defaults to cards', normalizeListMode(null) === 'cards');
+  t('empty string defaults to cards', normalizeListMode('') === 'cards');
+  t('undefined defaults to cards', normalizeListMode(undefined) === 'cards');
+  t('garbage defaults to cards', normalizeListMode('table') === 'cards', normalizeListMode('table'));
+  t('is total (returns one of the two modes for any input)',
+    ['list', 'cards', 42, {}, [], 'LIST'].every(function (v) {
+      var m = normalizeListMode(v); return m === 'list' || m === 'cards';
+    }));
+  t('case-sensitive: "LIST" is not the literal token, so it is cards', normalizeListMode('LIST') === 'cards');
 }
 
 console.log('\n' + pass + '/' + (pass + fail) + ' passed');
