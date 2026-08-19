@@ -214,6 +214,10 @@ def r_stats(ctx, m):
         "leads_by_target": group(
             "SELECT t.slug, COUNT(*) FROM leads l LEFT JOIN targets t ON t.id=l.target_id"
             " WHERE " + LEAD_IS_REAL_L + " GROUP BY t.slug"),
+        # Leads bucketed by their research class (BAC, DoS, ...). Same real-lead filter as the other
+        # two lead breakdowns; classless leads are dropped rather than piling into a '(none)' bucket.
+        "leads_by_class": group(
+            "SELECT class, COUNT(*) FROM leads WHERE " + LEAD_IS_REAL + " AND class<>'' GROUP BY class"),
         # PAID reports bucketed by class - the ones that actually earned money, not every
         # submission. Not a plain GROUP BY: reports that came straight from the API have no
         # local file and so no class, and theirs is derived from the CWE HackerOne assigned.
@@ -634,7 +638,7 @@ def r_list(ctx, m):
     sort = ctx.q("sort", "")
     order = " ORDER BY " + tiebreak
     if sort:
-        col = re.sub(r"[^a-zA-Z_]", "", sort.lstrip("-"))
+        col = re.sub(r"[^a-zA-Z0-9_]", "", sort.lstrip("-"))
         if col:
             # Money is stored as TEXT, so a plain ORDER BY compares it lexically and '750.0' sorts
             # above '[amount]' - the Programs tab listed a [amount] program ahead of a [amount] one. The
