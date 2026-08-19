@@ -47,7 +47,19 @@ POLITE_DELAY = 0.35
 # not a legal HackerOne handle, so it cannot collide with a real program.
 ALL_PROGRAMS = "all"
 
-SECRETS_PATH = os.path.join(common.APP_DIR, "secrets.json")
+# At the instance ROOT (next to config.json), never inside core/. Secrets that live in the code
+# directory are wiped by a code redeploy (an rsync of core/ with --delete removes any file the repo
+# does not carry, and secrets.json is git-ignored, so it vanishes). The root is on the data volume
+# and deploys never reach it.
+SECRETS_PATH = os.path.join(common.ROOT_DIR, "secrets.json")
+_OLD_SECRETS_PATH = os.path.join(common.APP_DIR, "secrets.json")
+try:
+    # One-time migration for a build that stored secrets under core/. Idempotent and guarded so it
+    # is safe to run from either module regardless of import order.
+    if os.path.exists(_OLD_SECRETS_PATH) and not os.path.exists(SECRETS_PATH):
+        os.replace(_OLD_SECRETS_PATH, SECRETS_PATH)
+except OSError:
+    pass
 
 # --------------------------------------------------------------- collaborators
 # The hacker API has no `collaborators` relationship (verified against #0000000, which genuinely
@@ -1210,7 +1222,7 @@ def write_report_file(row):
     return path
 
 
-def sync(conn, verbose=True, program_handle=None):
+def sync(conn, verbose=True, program_handle=None, progress=None):
     """Full two-phase sync. `program_handle=None` means EVERY program, as it does everywhere else
     in this module; pass a handle to narrow it."""
     username, token, _primary = get_credentials()
@@ -1253,7 +1265,12 @@ def sync(conn, verbose=True, program_handle=None):
     # report is fetched individually. That is one request per report and the reason this stays a
     # manual/nightly operation rather than the 15-minute poll (h1_watch.py), which only fetches
     # the details of reports the list says have moved.
-    for r in rows:
+    _total = len(rows)
+    for _i, r in enumerate(rows):
+        # Phase 2 is the slow half (one request per report); report how many are done so a caller
+        # can drive a progress bar instead of an indefinite spinner. progress=None for the CLI.
+        if progress:
+            progress(_i, _total)
         try:
             time.sleep(POLITE_DELAY)
             # The LIST payload's handle is the fallback, not the sync scope: with the sync no
@@ -1276,6 +1293,17 @@ def sync(conn, verbose=True, program_handle=None):
         stats[upsert_report(conn, r)] += 1
     stats["expected_filled"] = recover_expected_from_tracker(conn)
     stats["programs_indexed"] = index_programs(conn)
+    # Recompute each program's stored bounty_earned from its LOCAL awarded reports, using the exact
+    # predicate the dashboard total and the money invariant use (source='hackerone', bounty <> '').
+    # HackerOne's own program-level "bounties earned" stat lags the per-report data, so relying on
+    # it let the Programs list drift below the dashboard total. Stored '' when a program has no
+    # awards, so the column shows a dash rather than $0.00.
+    conn.execute(
+        "UPDATE programs SET bounty_earned = ("
+        " SELECT CASE WHEN COUNT(*) = 0 THEN ''"
+        "             ELSE printf('%.2f', COALESCE(SUM(CAST(r.bounty AS REAL)), 0)) END"
+        "   FROM reports r WHERE r.program = programs.slug"
+        "     AND r.source = 'hackerone' AND r.bounty <> '')")
     if verbose:
         print("h1 sync (%s): fetched=%d new=%d updated=%d unchanged=%d programs=+%d"
               % (stats["program"], stats["fetched"], stats["new"], stats["updated"],

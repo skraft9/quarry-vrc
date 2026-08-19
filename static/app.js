@@ -883,6 +883,52 @@
     return el('a', { href: u, target: '_blank', rel: 'noopener noreferrer', text: label || u });
   }
 
+  /* A small circular "i" that reveals a wordy note on hover, via the native title tooltip so it never
+     clips or needs positioning. Used to tuck explanatory copy out of the main flow. Reused across tabs. */
+  function infoBadge(text) {
+    var tip = el('span', { class: 'infotip', text: text, role: 'tooltip' });
+    var badge = el('span', { class: 'infobadge', text: 'i', 'aria-label': text,
+      role: 'button', tabindex: '0', 'aria-expanded': 'false' });
+    var wrap = el('span', { class: 'infobadge-wrap' }, [badge, tip]);
+    function set(open) {
+      wrap.classList.toggle('open', open);
+      badge.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+    /* Reveals on hover (CSS) AND on click/tap (this toggle), so it works on touch too. Closes when
+       the badge loses focus or on Escape, which needs no document-level listener to accumulate. */
+    badge.addEventListener('click', function (e) {
+      e.preventDefault(); e.stopPropagation(); set(!wrap.classList.contains('open'));
+    });
+    badge.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); set(!wrap.classList.contains('open')); }
+      else if (e.key === 'Escape') set(false);
+    });
+    badge.addEventListener('blur', function () { set(false); });
+    return wrap;
+  }
+
+  /* Give a custom view's `.filters` strip the same default-collapsed behaviour the entity tabs have:
+     the strip starts hidden and a compact toolbar button reveals it. `startOpen` forces it open when a
+     filter is already applied, so a narrowed list is never shown with nothing saying why. Returns the
+     toolbar element to place directly above the strip. */
+  function filtersToolbar(filters, opts) {
+    opts = opts || {};
+    filters.classList.add('filters-collapsible');
+    if (opts.startOpen) filters.classList.add('q-open');
+    var btn = el('button', {
+      class: 'btn btn-sm filters-toggle' + (opts.startOpen ? ' on' : ''), type: 'button',
+      text: opts.label || 'Search', 'aria-expanded': opts.startOpen ? 'true' : 'false',
+      title: 'Show or hide the filter controls'
+    });
+    btn.addEventListener('click', function () {
+      var open = !filters.classList.contains('q-open');
+      filters.classList.toggle('q-open', open);
+      btn.classList.toggle('on', open);
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+    return el('div', { class: 'listtoolbar' }, el('div', { class: 'lt-left' }, btn));
+  }
+
   /* cols: [{key,label,sort,cls,render(row)}]
      opts.cards turns the table into one card per row at phone widths - see the .tablewrap.cards
      rules in app.css. Opt-in rather than automatic: a card is the right shape for a list you read
@@ -1214,6 +1260,21 @@
     });
   }
 
+  /* The PRIV badge for the Tracker card's badging row: the SAME privpill node and per-level colour
+     privCell draws, relabelled so the "PR:" label rides inside the badge - PR:N / PR:L / PR:H.
+     Returns null (not a dash) when the row has no privileges metric, since the card omits absent
+     badges rather than printing an empty one. */
+  function privBadgeCard(r) {
+    var d = r && r.cvss_decoded;
+    var v = d && d.privileges;
+    if (!v) return null;
+    return el('span', {
+      class: 'privpill ' + (PRIV_CLASS[v] || ''),
+      title: 'Privileges required: ' + v + (r.cvss_vector ? '\n' + r.cvss_vector : ''),
+      text: 'PR:' + (PRIV_SHORT[v] || v)
+    });
+  }
+
   /* Impact on Confidentiality / Integrity / Availability, read off the same decoded CVSS vector
      as privCell. One coloured letter badge per impacted dimension - C red, I amber, A blue - with
      an up arrow for a High impact and a down arrow for Low. None-scored dimensions are dropped by
@@ -1398,20 +1459,6 @@
     ]);
   }
 
-  /* ------------------------------------------------- anticipated (unconfirmed) awards
-     `bounty` / `my_bounty` come from HackerOne and are facts. `expected_bounty` does NOT:
-     the researcher typed it in after spotting a published ExampleVendor advisory they believe
-     matches their report, so they expect to be paid. It is a belief, and the UI must never
-     let it be mistaken for money that has actually landed.
-
-     Rules applied everywhere below:
-       - anticipated amounts are NEVER added to a confirmed total;
-       - they always carry the dashed "expected" treatment plus the word "expected";
-       - the tooltip spells out that HackerOne has not confirmed the payment. */
-  var EXPECTED_CAVEAT =
-    'Anticipated, not confirmed. The researcher recorded this after seeing a published ' +
-    'advisory they believe matches this report. HackerOne has not confirmed a payment.';
-
   /* The HackerOne conversation on a report: triage bot, vendor engineers, our replies.
      Sourced from the API's `activities` feed and stored as JSON on the row, so this is the
      real exchange rather than anything reconstructed from a local file. */
@@ -1453,43 +1500,14 @@
     return panel;
   }
 
-  /* A recorded 0 means "nothing anticipated", not "an anticipated award of nothing". */
-  function hasExpected(r) {
-    var n = r ? parseMoney(r.expected_bounty) : null;
-    return n !== null && n > 0;
-  }
-
-  function expectedTitle(r) {
-    var bits = [EXPECTED_CAVEAT];
-    if (r && r.expected_cve) bits.push('Expected CVE: ' + String(r.expected_cve));
-    if (r && r.expected_note) bits.push(String(r.expected_note));
-    return bits.join('\n');
-  }
-
-  /* The one renderer for an anticipated amount. Returns null when there is nothing to show,
-     so callers can fall through to their normal em-dash. */
-  function expectedMoney(amount, currency, title) {
-    var n = parseMoney(amount);
-    if (n === null || n <= 0) return null;
-    /* The dashed outline IS the "this is anticipated, not confirmed" signal now - the same dashed
-       badge the summary tally carries - so the literal word is dropped. It read as "[amount]EXPECTED"
-       jammed against the amount in the narrow Bounty cell, and the border plus the warn hue, the
-       italics and the title tooltip already carry the meaning without it. */
-    return el('span', { class: 'money money-expected', title: title || EXPECTED_CAVEAT }, [
-      el('span', { class: 'exp-amt', text: fmtMoney(n, currency) })
-    ]);
-  }
-
   /* A payout split means my_bounty < bounty: part of the award went to a co-reporter. Show what
      actually landed for us, and keep the report total in the tooltip. */
   function bountyCell(r) {
     var total = parseMoney(r.bounty);
     var mine = parseMoney(r.my_bounty);
     if (total === null && mine === null) {
-      /* No confirmed award. If the researcher is anticipating one, show that instead of a
-         dash - in the unconfirmed treatment, never as a plain figure. */
-      return expectedMoney(r.expected_bounty, r.currency, expectedTitle(r)) ||
-        el('span', { class: 'muted', text: '—' });
+      /* No confirmed award. */
+      return el('span', { class: 'muted', text: '—' });
     }
     if (total !== null && mine !== null && Math.abs(total - mine) > 0.004) {
       return el('span', {
@@ -1566,7 +1584,7 @@
      not-applicable, so the default view is mostly closed noise.
 
      Carried in the URL as `exclude=duplicate,informative` so a filtered view is linkable and
-     survives a refresh, exactly like status/role/anticipated.
+     survives a refresh, exactly like status/role.
 
      PRECEDENCE: an explicit State selection WINS and exclusions are ignored while it is set -
      "only duplicates, except duplicates" has no useful answer, and silently returning zero
@@ -1671,18 +1689,13 @@
 
   function reportsSummary(items, params) {
     var totalBounty = 0, myShare = 0, paid = 0, splits = 0, collabs = 0;
-    /* Kept in its own accumulator on purpose: anticipated money must never touch totalBounty
-       or myShare, which are the HackerOne-confirmed figures. */
-    var expectedTotal = 0, expectedCount = 0;
     var currency = '';
     var byState = {};
 
     items.forEach(function (r) {
       var b = parseMoney(r.bounty);
       var m = parseMoney(r.my_bounty);
-      var x = parseMoney(r.expected_bounty);
       if (!currency && r.currency) currency = String(r.currency);
-      if (x !== null && x > 0) { expectedTotal += x; expectedCount++; }
       if (b !== null) { totalBounty += b; paid++; }
       /* my_bounty is only written when the award was split; otherwise the whole bounty is ours. */
       myShare += (m !== null ? m : (b !== null ? b : 0));
@@ -1700,16 +1713,6 @@
       sumStat(fmtMoney(myShare, currency) || '$0.00', 'my share',
         splits ? splits + ' payout split' + (splits === 1 ? '' : 's') : 'no payout splits')
     ]);
-
-    /* Anticipated money sits after a rule, in the dashed unconfirmed treatment, and is never
-       folded into the two figures above. */
-    if (expectedCount) {
-      stats.appendChild(sumStat(
-        fmtMoney(expectedTotal, currency),
-        'anticipated · unconfirmed',
-        expectedCount + ' report' + (expectedCount === 1 ? '' : 's') + ' awaiting confirmation',
-        { cls: 'sumstat-expected', title: EXPECTED_CAVEAT }));
-    }
 
     var keys = Object.keys(byState).sort(function (a, b) {
       var ia = REPORT_STATES.indexOf(a), ib = REPORT_STATES.indexOf(b);
@@ -2147,6 +2150,30 @@
       },
       summary: leadsSummary,
       summaryWhenEmpty: true,
+      /* Card-view accessors (see entityCards). The status pill, severity pill and freshness chip
+         are the SAME renderers the columns below use; only the layout differs. Leads carry no
+         decoded CVSS vector, so entityCards draws no priv/impact badge for them. */
+      card: {
+        spine: function (r) { return leadStatusClass(r.status); },
+        /* Same badge placement as the Tracker: the status pill on its own line at the top of the
+           badge group, the severity beneath it, the whole block flush at the base of the card. */
+        badges: function (r) {
+          var out = [];
+          if (r.status) {
+            var sp = pill(r.status);
+            sp.classList.add('dotpill');
+            out.push(sp);
+          }
+          return out;
+        },
+        /* Severity is only sometimes set on a lead, so it rides the mid-right of the card rather than
+           stacking under the status, where its absence would leave a ragged gap across the row. */
+        midRight: function (r) { return r.severity ? sevPill(r.severity) : null; },
+        ref: function (r) { return r.ref || ''; },
+        figWhen: function (r) { return fmtTime(r.mtime); },
+        figLabel: 'modified',
+        updEntity: 'lead_updates'
+      },
       columns: [
         {
           key: 'title', label: 'Title', sort: 'title', cls: 'cell-title cell-max',
@@ -2233,8 +2260,15 @@
         'comments come from the API.',
       plural: 'reports',
       singular: 'report',
-      canCreate: true,
-      filters: { q: true, target: true, cls: true, status: true, role: true, anticipated: true,
+      /* No manual "New report" form: a report is filed to HackerOne through the API from a finished
+         draft (see the guide), which beats retyping fields into a web form here. */
+      canCreate: false,
+      docsLink: {
+        href: 'https://github.com/skraft9/quarry-vrc/blob/main/docs/USER_GUIDE.md#71-the-api-token-sync-and-submit',
+        text: 'How to submit',
+        title: 'Reports are filed to HackerOne with the API from a finished draft, not typed into a web form here. Open the guide.'
+      },
+      filters: { q: true, target: true, cls: true, status: true, role: true,
                  program: true, exclude: true },
       /* No filter strip above the table. The state chips in the summary and the exclusion chips
          under it already ARE the filters, and a row of selects duplicating them only pushed the
@@ -2249,9 +2283,6 @@
       statusOptions: [''].concat(REPORT_STATES),
       roleLabel: 'Role',
       roleOptions: ['', 'reporter', 'collaborator'],
-      anticipatedLabel: 'Anticipated only',
-      anticipatedTitle: 'Show only reports carrying an anticipated (unconfirmed) award. ' +
-        EXPECTED_CAVEAT,
       defaultSort: '-submitted_on',
       fetchAll: true,
       /* Both of these are client-side: the server filters on q/target/class/status only
@@ -2263,12 +2294,47 @@
             return String(r.my_role || '').toLowerCase() === params.role;
           });
         }
-        if (params.anticipated === '1') out = out.filter(hasExpected);
         /* Last, so "Hiding N of M" counts against everything else the user asked for. */
         out = applyExclusions(out, params);
         return out;
       },
       summary: reportsSummary,
+      /* Card-view accessors (see entityCards). State/severity reuse statePill/sevCell, and the
+         PRIV + IMPACT badges in the subline are privCell/impactCell verbatim - the same nodes the
+         table draws - shown for the rows that carry a decoded CVSS vector. The right-hand figure
+         is the confirmed bounty, over the submission date. */
+      card: {
+        spine: function (r) { return stateClass(r.state); },
+        /* No title-row status or `sev`: the Tracker card keeps the title alone on the title row and
+           moves the state pill, severity, score, PR and impact into the badge group at the base of
+           the card, so the block stays put however far the title wraps. State pill first, the
+           severity to its right, on one wrapping line, for a consistent alignment across the row. */
+        badges: function (r) {
+          var out = [];
+          if (r.state) {
+            var sp = statePill(r.state);
+            sp.classList.add('dotpill');
+            out.push(sp);
+          }
+          if (r.severity) out.push(sevPill(r.severity));
+          if (r.cvss) out.push(el('span', { class: 'scorebadge', text: String(r.cvss),
+            title: 'CVSS base score' }));
+          var pr = privBadgeCard(r);
+          if (pr) out.push(pr);
+          var dec = r.cvss_decoded;
+          if (dec && dec.impact && dec.impact.length) out.push(impactCell(r));
+          return out;
+        },
+        ref: function (r) { return r.h1_id ? ('#' + r.h1_id) : ''; },
+        refHref: function (r) { return r.url || ''; },
+        figMain: function (r) {
+          if (parseMoney(r.bounty) === null && parseMoney(r.my_bounty) === null) return null;
+          return el('span', { class: 'ic-money' }, bountyCell(r));
+        },
+        figWhen: function (r) { return fmtDateOnly(r.submitted_on) || ''; },
+        figLabel: 'submitted',
+        updEntity: 'report_updates'
+      },
       columns: [
         {
           key: 'h1_id', label: 'H1', sort: 'h1_id', cls: 'cell-mono nowrap',
@@ -2377,12 +2443,6 @@
           ['Bounty', fmtMoney(r.bounty, r.currency)],
           ['My share', fmtMoney(r.my_bounty, r.currency)],
           ['Payout split', split],
-          /* Deliberately below the confirmed money and visibly different: this is the
-             researcher's own expectation, not a HackerOne figure. */
-          ['Expected bounty (unconfirmed)',
-            expectedMoney(r.expected_bounty, r.currency, expectedTitle(r))],
-          ['Expected CVE', r.expected_cve ? cveCell(r.expected_cve) : ''],
-          ['Expected note', r.expected_note],
           ['Role', r.my_role ? rolePill(r.my_role) : ''],
           ['Reporter', reporter],
           ['Collaborators', collabs],
@@ -2409,22 +2469,6 @@
       },
       extra: function (r) {
         var out = [];
-        /* An unmissable caveat next to the number, for the one case where the pane shows an
-           amount nobody has actually been paid. */
-        if (hasExpected(r)) {
-          out.push(el('div', { class: 'expected-panel' }, [
-            el('div', { class: 'ep-head' }, [
-              el('span', { class: 'ep-title', text: 'Anticipated award' }),
-              el('span', { class: 'exp-tag', text: 'unconfirmed' })
-            ]),
-            el('div', { class: 'ep-amt' }, [
-              expectedMoney(r.expected_bounty, r.currency, expectedTitle(r)),
-              r.expected_cve ? el('span', { class: 'ep-cve', text: String(r.expected_cve) }) : null
-            ]),
-            el('p', { class: 'ep-note', text: EXPECTED_CAVEAT }),
-            r.expected_note ? el('p', { class: 'ep-note ep-own', text: String(r.expected_note) }) : null
-          ]));
-        }
         /* The raw legacy tracker markdown row is NOT rendered. It was a horizontally
            scrolling pipe-delimited line duplicating fields already shown above, sourced
            from the file tracker that HackerOne has replaced. */
@@ -2465,6 +2509,18 @@
       statusLabel: 'Status',
       statusOptions: ['', 'watch', 'relevant', 'dismissed'],
       defaultSort: '-published',
+      /* Card-view accessors (see entityCards). An advisory has no lifecycle spine, so it takes the
+         neutral one; its CVSS vector still feeds the same privCell/impactCell badges the table uses.
+         The title strips its CVE prefix exactly as the column does. */
+      card: {
+        spine: function () { return 'st-unknown'; },
+        status: function (r) { return r.status ? pill(r.status) : null; },
+        sev: function (r) { return r.severity ? sevPill(r.severity) : null; },
+        title: function (r) { return advisoryTitle(r); },
+        ref: function (r) { return r.ref || r.cve || ''; },
+        figWhen: function (r) { return fmtDateOnly(r.published) || ''; },
+        figLabel: 'published'
+      },
       columns: [
         { key: 'ref', label: 'Ref', cls: 'cell-mono nowrap' },
         {
@@ -2554,6 +2610,7 @@
          and invited included) and onboards the one you choose. */
       addPrograms: true,
       filters: { q: true },
+      collapsibleFilters: true,
       defaultSort: 'name',
       /* Conceal mode (the crossed-circle toggle) blurs the identity of every program that is NOT
          public - private, soft-launched or never-synced - so the tab screenshots without leaking
@@ -2961,6 +3018,132 @@
     return dl;
   }
 
+  /* ------------------------------------------------------- list view mode (card / list)
+     Card vs list is a display choice shared by every entity list (Leads, Tracker, Advisories),
+     persisted like the theme and the nav-collapse flag so it survives navigation. One key across
+     all three views, deliberately: a hunter who prefers cards wants them everywhere, not per tab.
+     Anything other than the literal 'list' means cards - the default the maintainer approved. */
+  var LIST_MODE_KEY = 'quarry.listmode';
+
+  /* Pure and total: any stored/garbage value collapses to a valid mode, defaulting to cards.
+     Lifted whole by tests/test_render.js, so it must not close over anything. */
+  function normalizeListMode(raw) { return raw === 'list' ? 'list' : 'cards'; }
+
+  function readListMode() {
+    try { return normalizeListMode(localStorage.getItem(LIST_MODE_KEY)); } catch (e) { return 'cards'; }
+  }
+
+  function writeListMode(mode) {
+    try { localStorage.setItem(LIST_MODE_KEY, normalizeListMode(mode)); } catch (e) { /* private mode */ }
+  }
+
+  /* Meta subline builder: appends a node preceded by a middot separator once the row already
+     carries something, so "program · target · ref · priv · impact" reads with dividers but never
+     opens or doubles one. A falsy node is skipped, which is how priv/impact drop out on the rows
+     (every Lead) that carry no decoded CVSS vector. */
+  function cardMetaPush(meta, node) {
+    if (!node) return;
+    if (meta.childNodes.length) {
+      meta.appendChild(el('span', { class: 'sep', 'aria-hidden': 'true', text: '·' }));
+    }
+    meta.appendChild(node);
+  }
+
+  /* The CARD equivalent of dataTable: the same rows, the same click-through and selection, drawn
+     as the spacious stacked cards the maintainer approved instead of a table. Every pill, severity,
+     priv and impact node is the SAME renderer the table columns use, so the two modes can never
+     drift in what a status or an impact badge looks like. Per-entity specifics (which field is the
+     status, the ref, the right-hand figure) come off cfg.card; everything shared - program, target,
+     class, priv, impact - is computed here so one change covers Leads, Tracker and Advisories. */
+  function entityCards(cfg, rows, opts) {
+    opts = opts || {};
+    var cd = cfg.card || {};
+    var list = el('div', { class: 'itemlist' });
+    rows.forEach(function (r) {
+      var card = el('div', { class: 'itemcard ent-' + cfg.entity + ' ' +
+        (cd.spine ? cd.spine(r) : 'st-unknown') });
+
+      /* Title row: NEW/UPDATED chip, the prominent title, then the status and severity pills. */
+      var titleRow = el('div', { class: 'ic-titlerow' });
+      var fresh = freshTag(rowFreshness(r, cfg.entity, cd.updEntity || cfg.entity));
+      if (fresh) titleRow.appendChild(fresh);
+      titleRow.appendChild(el('span', { class: 'ic-title',
+        text: cd.title ? cd.title(r) : (r.title || '(untitled)') }));
+      var statusNode = cd.status ? cd.status(r) : null;
+      if (statusNode) { statusNode.classList.add('dotpill'); titleRow.appendChild(statusNode); }
+      /* Severity rides the title row for Leads/Advisories; the Tracker instead supplies a `badges`
+         builder and moves severity (with the score, PR and impact) down onto the badging row, so
+         its title row carries only the title and the state pill. */
+      var sevNode = cd.sev ? cd.sev(r) : null;
+      if (sevNode) titleRow.appendChild(sevNode);
+
+      /* Optional badging row (the Tracker): severity, CVSS score, PR:<level> and the C/I/A impact
+         badges grouped together directly beneath the title. A view that supplies `badges` draws its
+         priv/impact HERE, so the meta subline below drops them and never doubles a badge. */
+      var badgeRow = null;
+      if (cd.badges) {
+        badgeRow = el('div', { class: 'ic-badges' });
+        cd.badges(r).forEach(function (b) { if (b) badgeRow.appendChild(b); });
+        if (!badgeRow.childNodes.length) badgeRow = null;
+      }
+
+      /* Meta subline: program · target · class · ref. For views WITHOUT a badging row (Advisories)
+         it also carries the PRIV and IMPACT badges - the exact nodes privCell/impactCell build -
+         shown only where the row has a decoded CVSS vector (never on a Lead). */
+      var meta = el('div', { class: 'ic-meta' });
+      var prog = r.program_name || r.program || '';
+      cardMetaPush(meta, prog ? el('span', { class: 'ic-prog', text: prog }) : null);
+      var tgt = targetLabel(r);
+      if (!tgt && r.asset) tgt = String(r.asset_label || r.asset).toLowerCase();
+      cardMetaPush(meta, tgt ? el('span', { class: 'ic-tgt', text: tgt }) : null);
+      cardMetaPush(meta, r['class'] ? el('span', { class: 'tag', text: String(r['class']) }) : null);
+      var refTxt = cd.ref ? cd.ref(r) : '';
+      if (refTxt) {
+        var refHref = cd.refHref ? safeURL(cd.refHref(r)) : '';
+        cardMetaPush(meta, refHref
+          ? el('a', { class: 'ref', href: refHref, target: '_blank', rel: 'noopener noreferrer',
+              text: refTxt, title: 'Open ' + refTxt + ' on HackerOne',
+              onclick: function (e) { e.stopPropagation(); },
+              onkeydown: function (e) { e.stopPropagation(); } })
+          : el('span', { class: 'ref', text: refTxt }));
+      }
+      if (!cd.badges) {
+        var dec = r.cvss_decoded;
+        if (dec && dec.privileges) cardMetaPush(meta, privCell(r));
+        if (dec && dec.impact && dec.impact.length) cardMetaPush(meta, impactCell(r));
+      }
+
+      var main = el('div', { class: 'ic-main' }, [titleRow, badgeRow, meta]);
+
+      /* Right column: the entity's headline figure (a Tracker bounty) over its date and a label,
+         then the chevron the mockup carries. */
+      var figKids = [];
+      var figMain = cd.figMain ? cd.figMain(r) : null;
+      if (figMain) figKids.push(figMain);
+      var when = cd.figWhen ? cd.figWhen(r) : '';
+      if (when) figKids.push(el('span', { class: 'ic-when', text: when }));
+      if (cd.figLabel && (figMain || when)) figKids.push(el('span', { class: 'ic-figlabel', text: cd.figLabel }));
+      var right = el('div', { class: 'ic-right' }, [
+        figKids.length ? el('div', { class: 'ic-figure' }, figKids) : null,
+        el('span', { class: 'ic-chev', 'aria-hidden': 'true', text: '›' })
+      ]);
+
+      card.appendChild(main);
+      card.appendChild(right);
+      /* An optional badge pinned to the mid-right of the card (Leads use it for the sometimes-set
+         severity), positioned absolutely so it never disturbs the main/figure columns. */
+      var midRight = cd.midRight ? cd.midRight(r) : null;
+      if (midRight) { midRight.classList.add('ic-midright'); card.appendChild(midRight); }
+
+      if (opts.rowClass) { var rc = opts.rowClass(r); if (rc) card.classList.add(rc); }
+      if (opts.selectedId !== undefined && opts.selectedId !== null &&
+        String(r[opts.idKey || 'id']) === String(opts.selectedId)) card.classList.add('selected');
+      if (opts.onRow) activatable(card, function () { opts.onRow(r); });
+      list.appendChild(card);
+    });
+    return list;
+  }
+
   function entityListView(root, cfg, ctx) {
     var q = ctx.q;
     var params = {
@@ -2971,8 +3154,6 @@
       /* `role` is filtered client-side: the server has no my_role filter (API.md documents
          q/target/class/status only), and my_role is a derived column. */
       role: q.get('role') || '',
-      /* '1' = only rows carrying an anticipated (unconfirmed) award. Client-side, same reason. */
-      anticipated: q.get('anticipated') === '1' ? '1' : '',
       /* '' = let the server apply the primary program, 'all' = every program, otherwise one
          handle. Server-side: the default lives with the credential it is derived from, so a
          direct API call is scoped the same way the tab is. */
@@ -2995,7 +3176,7 @@
       for (var p in patch) next[p] = patch[p];
       if (patch.offset === undefined && (patch.q !== undefined || patch.target !== undefined ||
         patch['class'] !== undefined || patch.status !== undefined || patch.role !== undefined ||
-        patch.anticipated !== undefined || patch.exclude !== undefined ||
+        patch.exclude !== undefined ||
         patch.program !== undefined || patch.paid !== undefined || patch.limit !== undefined)) {
         next.offset = 0;
       }
@@ -3013,10 +3194,10 @@
          chips are its filters, they just live inside the list card instead of in a strip above
          it. Those need collapsing on a phone for the same reason the strip does, so the button
          exists for them too and targets the list card. */
-      if (cfg.filterBar === false) return (cfg.summary || cfg.filters.exclude) ? 'Filters' : null;
+      if (cfg.filterBar === false) return (cfg.summary || cfg.filters.exclude) ? 'Search' : null;
       var f = cfg.filters;
-      var beyondSearch = f.target || f.cls || f.status || f.role || f.program || f.anticipated;
-      if (beyondSearch) return 'Filters';
+      var beyondSearch = f.target || f.cls || f.status || f.role || f.program;
+      if (beyondSearch) return 'Search';
       return f.q ? 'Search' : null;
     }
 
@@ -3025,17 +3206,22 @@
        start closed and stay closed until tapped. */
     function anyFilterApplied() {
       return !!(params.q || params.target || params['class'] || params.status || params.role ||
-        params.program || params.anticipated === '1');
+        params.program);
     }
+
+    /* Card is the default (readListMode), and the choice is shared across Leads/Tracker/Advisories.
+       `redrawList` is set by load() once the page is known, so the view toggle can swap table for
+       cards WITHOUT refetching - it only re-renders the rows already in hand. */
+    var mode = readListMode();
+    var redrawList = null;
 
     var isNew = ctx.id === 'new';
     var head = el('div', { class: 'page-head' }, [
       el('div', {}, [
-        el('h1', { class: 'page-title', text: cfg.label }),
-        /* Each entity says something true about ITSELF. The old blanket line claimed every
-           list was "indexed from markdown files, the files remain the source of truth", which
-           stopped being true when reports moved to the HackerOne API. */
-        cfg.sub ? el('p', { class: 'page-sub', text: cfg.sub }) : null
+        el('h1', { class: 'page-title', text: cfg.label })
+        /* Per-tab description subtitles were removed: the title stands on its own and the cards
+           below say what each page is. `cfg.sub` is still accepted by the view config but no
+           longer rendered, so nothing downstream breaks. */
       ]),
       el('div', { class: 'page-actions' }, [
         /* MOBILE FILTER TOGGLE. Hidden on desktop by CSS, where the card is already visible and a
@@ -3053,18 +3239,16 @@
               title: 'Show the ' + mobileToggleLabel().toLowerCase()
             })
           : null,
-        /* SORT. In card mode the column headers collapse to a single sort row, which was sitting
-           above the rows taking a chunk of a phone screen for a control used occasionally. It
-           becomes a button, like Search and Filters, and reveals the same row. */
-        cfg.columns
-          ? el('button', {
-              class: 'btn btn-sm mobile-sort-toggle', type: 'button', text: 'Sort',
-              title: 'Show the sort controls'
-            })
-          : null,
-        cfg.addPrograms ? el('button', { class: 'btn btn-primary', type: 'button', text: '+ Add program',
+        /* SORT no longer lives here: the list toolbar below carries one compact Sort control that
+           works in both card and list mode at every width, so the phone-only sort-reveal button and
+           its desktop twin (the table's column headers) are no longer the only way to re-sort. */
+        cfg.addPrograms ? el('button', { class: 'btn btn-sm btn-primary', type: 'button', text: '+ Add program',
           title: 'Search your HackerOne programs and add one to track' }) : null,
-        cfg.canCreate ? el('a', { class: 'btn btn-primary', href: '#/' + cfg.entity + '/new', text: 'New ' + cfg.singular }) : null
+        /* Tucked and compact, right-aligned by .page-actions, so the queue - not the New button -
+           is what the eye lands on. */
+        cfg.docsLink ? el('a', { class: 'btn btn-sm', href: cfg.docsLink.href,
+          target: '_blank', rel: 'noopener noreferrer', text: cfg.docsLink.text, title: cfg.docsLink.title })
+          : (cfg.canCreate ? el('a', { class: 'btn btn-sm btn-primary', href: '#/' + cfg.entity + '/new', text: 'New ' + cfg.singular }) : null)
       ])
     ]);
     root.appendChild(head);
@@ -3082,31 +3266,108 @@
       });
     }
 
-    /* Wired after the filter card exists, further down, because the toggle targets it. */
+    /* Only the three card-capable views (Leads, Tracker, Advisories) carry a `card` descriptor.
+       Programs also flows through entityListView; it has no card layout, so it stays a table and
+       keeps its filters exactly as before - no view toggle, no desktop-collapse. */
+    var cardable = !!cfg.card;
+    if (!cardable) mode = 'list';
+    /* Card views always get the default-collapsed filter strip; a plain table can opt in with
+       `collapsibleFilters` (Programs does) so its strip also starts hidden behind the toolbar's
+       toggle, consistent with the card tabs. */
+    var collapseFilters = cardable || !!cfg.collapsibleFilters;
+
+    /* LIST TOOLBAR: one compact strip under the heading carrying the controls that apply to the
+       whole list in either mode - a desktop Filters reveal, a Sort control, and the card/list view
+       toggle. It sits above the split so it governs the list pane whether or not a detail is open. */
+    var toolbar = el('div', { class: 'listtoolbar' });
+    var cardBtn = null, listBtn = null;
+
+    /* Desktop-only Filters/Search reveal. Only for card-capable views that HAVE a filter strip
+       (Leads, Advisories); the Tracker keeps its filters as chips inside the list card, so there is
+       nothing here to reveal for it. On a phone the page-actions button owns this instead - CSS
+       hides whichever is not for the current width, so the two never both show. */
+    var filtersToggle = (collapseFilters && mobileToggleLabel())
+      ? el('button', {
+          class: 'btn btn-sm filters-toggle', type: 'button', text: mobileToggleLabel(),
+          title: 'Show or hide the ' + mobileToggleLabel().toLowerCase() + ' controls'
+        })
+      : null;
+    toolbar.appendChild(el('div', { class: 'lt-left' }, filtersToggle));
+
+    var ltRight = el('div', { class: 'lt-right' });
+
+    /* SORT. One control for both modes and every width: the card view has no column headers to
+       click, and the phone had only the header-reveal, so this replaces both. The direction button
+       flips asc/desc on the chosen column; `go({sort})` navigates, exactly like a header click. */
+    var sortable = (cfg.columns || []).filter(function (c) { return c.sort; });
+    if (sortable.length) {
+      var curSort = params.sort || '';
+      var curDesc = curSort.charAt(0) === '-';
+      var curBase = curDesc ? curSort.slice(1) : curSort;
+      var sortSel = selectEl(
+        [{ value: '', label: 'Default order' }].concat(
+          sortable.map(function (c) { return { value: c.sort, label: 'Sort: ' + c.label }; })),
+        curBase,
+        function (v) { go({ sort: v ? (curDesc ? '-' + v : v) : '' }); });
+      sortSel.setAttribute('aria-label', 'Sort by');
+      var dirBtn = el('button', {
+        class: 'btn btn-sm sortdir', type: 'button',
+        disabled: curBase ? null : true,
+        'aria-label': curDesc ? 'Sorted descending, switch to ascending'
+                              : 'Sorted ascending, switch to descending',
+        title: curDesc ? 'Descending - click for ascending' : 'Ascending - click for descending',
+        text: curDesc ? '↓' : '↑',
+        onclick: function () { if (curBase) go({ sort: curDesc ? curBase : '-' + curBase }); }
+      });
+      ltRight.appendChild(el('div', { class: 'sortctl' }, [sortSel, dirBtn]));
+    }
+
+    /* CARD / LIST view toggle - a segmented control, card first because it is the default. */
+    if (cardable) {
+      cardBtn = el('button', {
+        class: 'vt-btn' + (mode === 'cards' ? ' on' : ''), type: 'button',
+        'aria-pressed': mode === 'cards' ? 'true' : 'false',
+        title: 'Card view', text: 'Cards', onclick: function () { setMode('cards'); }
+      });
+      listBtn = el('button', {
+        class: 'vt-btn' + (mode === 'list' ? ' on' : ''), type: 'button',
+        'aria-pressed': mode === 'list' ? 'true' : 'false',
+        title: 'List view', text: 'List', onclick: function () { setMode('list'); }
+      });
+      ltRight.appendChild(el('div', { class: 'viewtoggle', role: 'group', 'aria-label': 'View mode' },
+        [cardBtn, listBtn]));
+    }
+    toolbar.appendChild(ltRight);
+    /* Nothing to show for a view with neither sort nor a toggle (e.g. an unsorted table): skip the
+       empty bar rather than draw a hairline of nothing. */
+    if (filtersToggle || sortable.length || cardable) root.appendChild(toolbar);
+
+    function setMode(m) {
+      m = normalizeListMode(m);
+      if (m === mode || !cardBtn) return;
+      mode = m;
+      writeListMode(m);
+      cardBtn.classList.toggle('on', m === 'cards');
+      cardBtn.setAttribute('aria-pressed', m === 'cards' ? 'true' : 'false');
+      listBtn.classList.toggle('on', m === 'list');
+      listBtn.setAttribute('aria-pressed', m === 'list' ? 'true' : 'false');
+      if (redrawList) redrawList();
+    }
+
+    /* Wired after the filter card exists, further down, because the toggle targets it. The old
+       phone sort-reveal button is gone: the list toolbar's Sort control now re-sorts in both modes
+       at every width, so there is nothing to wire here for sort. */
     var mobileSearchBtn = head.querySelector('.mobile-search-toggle');
-    var mobileSortBtn = head.querySelector('.mobile-sort-toggle');
 
     /* MODE CHIPS. Yes/no cuts over the whole list - the sort of thing a select buries. Built
        in one place and rendered by whichever container is active: the filter strip when a view
        has one, the chip bar under the list when it does not. One definition, so a mode can never
        end up with two switches that disagree.
 
-       Anticipated: it has to be obvious enough that unconfirmed awards are findable without
-       already knowing they exist. Programs: it widens the WHOLE list, which is not something to
+       Programs: it widens the WHOLE list, which is not something to
        bury in a select full of handles. */
     function modeChips() {
       var out = [];
-      if (cfg.filters.anticipated) {
-        var antiOn = params.anticipated === '1';
-        out.push(el('button', {
-          class: 'btn chip-expected' + (antiOn ? ' on' : ''),
-          type: 'button',
-          'aria-pressed': antiOn ? 'true' : 'false',
-          title: cfg.anticipatedTitle || '',
-          text: cfg.anticipatedLabel || 'Anticipated only',
-          onclick: function () { go({ anticipated: antiOn ? '' : '1' }); }
-        }));
-      }
       if (cfg.filters.program) {
         /* A picker rather than an all-or-primary toggle. The list defaults to every program now,
            so the useful action is "narrow to one", which a two-state button cannot express once
@@ -3131,7 +3392,11 @@
        It is BUILT either way and only the append is conditional. Wrapping eighty lines in an
        `if` to save a handful of detached DOM nodes would have re-indented the whole block for
        nothing. */
-    var filters = el('div', { class: 'filters card' });
+    /* `filters-collapsible` opts the strip into the default-collapsed treatment on DESKTOP too (it
+       was phone-only before): it is hidden until the toolbar's Filters button reveals it, so the
+       list leads. A filtered URL still forces it open on load via anyFilterApplied() below, so a
+       narrowed list is never shown with nothing on screen saying why. */
+    var filters = el('div', { class: 'filters card' + (collapseFilters ? ' filters-collapsible' : '') });
     if (cfg.filters.q) {
       var qInput = el('input', { type: 'search', value: params.q, placeholder: 'title / body…', spellcheck: 'false' });
       qInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') go({ q: qInput.value }); });
@@ -3219,7 +3484,7 @@
        presentation, not a filter, so they do not light up Reset. */
     function filtersActive() {
       return !!(params.q || params.target || params['class'] || params.status || params.role ||
-                params.anticipated || params.paid || params.exclude || params.program);
+                params.paid || params.exclude || params.program);
     }
 
     function drawExcludeRow(allRows, shownCount) {
@@ -3317,7 +3582,7 @@
 
 
     var split = el('div', { class: 'split' + (ctx.id ? '' : ' no-detail') });
-    var listCard = el('section', { class: 'pane card' });
+    var listCard = el('section', { class: 'pane card ent-' + cfg.entity });
     /* FILTERS LIVE IN TWO PLACES and one button has to reach both. Leads keeps a filter strip
        above the list AND include chips inside the list card; the Tracker has no strip at all and
        only the chips. Toggling just one of them is how the Leads chips ended up hidden with no
@@ -3327,24 +3592,30 @@
        Same rule as before for the initial state: if the URL already narrows the list, both open
        on load, so a filtered list is never shown on a phone with nothing saying why it is short. */
     if (anyFilterApplied()) listCard.classList.add('q-open');
+    /* One handler, two buttons: the phone's page-actions button and the desktop toolbar's
+       Filters button both flip `q-open` on the strip AND the list card (see the two-homes comment
+       above). Each keeps its own aria-expanded in step. */
+    function toggleFilters(btn) {
+      var open = !filters.classList.contains('q-open');
+      filters.classList.toggle('q-open', open);
+      listCard.classList.toggle('q-open', open);
+      if (mobileSearchBtn) mobileSearchBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      if (filtersToggle) {
+        filtersToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        filtersToggle.classList.toggle('on', open);
+      }
+      /* Focus the search box when there is one, since typing is the likeliest next action.
+         Views whose controls are only chips get no focus call rather than a wrong one. */
+      if (open && qInput) { qInput.focus(); qInput.select(); }
+    }
     if (mobileSearchBtn) {
-      mobileSearchBtn.addEventListener('click', function () {
-        var open = !filters.classList.contains('q-open');
-        filters.classList.toggle('q-open', open);
-        listCard.classList.toggle('q-open', open);
-        mobileSearchBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
-        /* Focus the search box when there is one, since typing is the likeliest next action.
-           Views whose controls are only chips get no focus call rather than a wrong one. */
-        if (open && qInput) { qInput.focus(); qInput.select(); }
-      });
+      mobileSearchBtn.addEventListener('click', function () { toggleFilters(mobileSearchBtn); });
       mobileSearchBtn.setAttribute('aria-expanded', anyFilterApplied() ? 'true' : 'false');
     }
-    if (mobileSortBtn) {
-      mobileSortBtn.addEventListener('click', function () {
-        var open = listCard.classList.toggle('sort-open');
-        mobileSortBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
-      });
-      mobileSortBtn.setAttribute('aria-expanded', 'false');
+    if (filtersToggle) {
+      filtersToggle.addEventListener('click', function () { toggleFilters(filtersToggle); });
+      filtersToggle.setAttribute('aria-expanded', anyFilterApplied() ? 'true' : 'false');
+      filtersToggle.classList.toggle('on', anyFilterApplied());
     }
     split.appendChild(listCard);
     root.appendChild(split);
@@ -3357,6 +3628,9 @@
 
     function load() {
       clear(listCard);
+      /* Dropped until the next render rebuilds it, so the view toggle can never call a redraw that
+         points at rows cleared out from under it. */
+      redrawList = null;
       append(listCard, loading('Loading ' + cfg.label.toLowerCase() + '…'));
 
       /* fetchAll views pull the whole filtered set in one request and page it in the browser, so
@@ -3444,20 +3718,39 @@
               'Clear the filters, or run a re-index from Tools if files were added on disk.'));
           } else {
             listCard.appendChild(classDatalist(page));
-            listCard.appendChild(dataTable(cfg.columns, page, {
-              cards: true,
-              sort: params.sort,
-              onSort: function (s) { go({ sort: s }); },
-              rowClass: cfg.rowClass || null,
-              onRow: function (r) {
-                location.hash = '#/' + cfg.entity + '/' + encodeURIComponent(r.id) +
-                  (qsFrom(params) ? '?' + qsFrom(params) : '');
-              },
-              selectedId: ctx.id
-            }));
-            listCard.appendChild(pagerBar(total, params.limit, params.offset,
-              function (off) { go({ offset: off }); },
-              function (lim) { go({ limit: lim }); }));
+            /* Rows live in their own container so the view toggle can swap table for cards in
+               place, WITHOUT a refetch: `redrawList` clears just this node and redraws whichever
+               mode is current, then re-appends the pager. Everything above (summary, chips) and the
+               request itself are untouched, so no filter/scope/pager logic is duplicated. */
+            var listBody = el('div', { class: 'listbody' });
+            listCard.appendChild(listBody);
+            function onRow(r) {
+              location.hash = '#/' + cfg.entity + '/' + encodeURIComponent(r.id) +
+                (qsFrom(params) ? '?' + qsFrom(params) : '');
+            }
+            redrawList = function () {
+              clear(listBody);
+              if (mode === 'list') {
+                listBody.appendChild(dataTable(cfg.columns, page, {
+                  cards: true,
+                  sort: params.sort,
+                  onSort: function (s) { go({ sort: s }); },
+                  rowClass: cfg.rowClass || null,
+                  onRow: onRow,
+                  selectedId: ctx.id
+                }));
+              } else {
+                listBody.appendChild(entityCards(cfg, page, {
+                  rowClass: cfg.rowClass || null,
+                  onRow: onRow,
+                  selectedId: ctx.id
+                }));
+              }
+              listBody.appendChild(pagerBar(total, params.limit, params.offset,
+                function (off) { go({ offset: off }); },
+                function (lim) { go({ limit: lim }); }));
+            };
+            redrawList();
           }
         })
         .catch(function (err) {
@@ -3476,9 +3769,17 @@
     var pct = max > 0 ? Math.max(2, Math.round((value / max) * 100)) : 0;
     var fill = el('div', { class: 'bf' + (opts.fillClass ? ' ' + opts.fillClass : '') });
     fill.style.width = pct + '%';   /* CSSOM: allowed under style-src 'self' */
+    /* A small colour swatch keys the row to its bar, matching the mockup. It carries the SAME
+       status class as the fill, so swatch and bar always share a colour; with no status class it
+       falls back to the accent, like the fill. The label text lives in its own span so it can
+       ellipsis without clipping the swatch. */
+    var lbl = [
+      el('span', { class: 'sw' + (opts.fillClass ? ' ' + opts.fillClass : ''), 'aria-hidden': 'true' }),
+      el('span', { class: 'bl-t', text: label, title: label })
+    ];
     var labelNode = opts.href
-      ? el('a', { class: 'bl', href: opts.href, text: label, title: label })
-      : el('span', { class: 'bl', text: label, title: label });
+      ? el('a', { class: 'bl', href: opts.href, title: label }, lbl)
+      : el('span', { class: 'bl', title: label }, lbl);
     return el('div', { class: 'barrow' + (opts.rowClass ? ' ' + opts.rowClass : '') }, [
       labelNode,
       el('div', { class: 'bt' }, fill),
@@ -3533,10 +3834,16 @@
     opts = opts || {};
     var keys = breakdownKeys(obj, opts);
 
-    var max = 0;
-    keys.forEach(function (k) { max = Math.max(max, obj[k] || 0); });
+    var max = 0, sum = 0;
+    keys.forEach(function (k) { var v = obj[k] || 0; max = Math.max(max, v); sum += v; });
 
-    var card = el('section', { class: 'card' }, el('div', { class: 'card-title', text: title }));
+    /* Header ports the mockup's panel head: the title, and (when the caller names a unit) a quiet
+       running count of the rows shown, e.g. "109 categorized". */
+    var head = [el('span', { class: 'card-title', text: title })];
+    if (opts.countLabel) {
+      head.push(el('span', { class: 'bd-count', text: sum + ' ' + opts.countLabel }));
+    }
+    var card = el('section', { class: 'card' }, el('div', { class: 'bd-head' }, head));
     if (!keys.length) {
       card.appendChild(empty('No data yet'));
       return card;
@@ -4355,16 +4662,74 @@
     return api('/unseen?' + qsFrom(q)).catch(function () { return {}; });
   }
 
+  /* Inline-SVG sparkline for a dashboard tile. Pure geometry from a numeric series - no user
+     data reaches it, so the returned markup is safe to hand to innerHTML (see sparkNode). Lifted
+     from the approved dashboard mockup; colours are theme tokens so it follows light/dark. */
+  var sparkSeq = 0;
+  function spark(vals) {
+    if (!vals || !vals.length) vals = [0, 0];
+    if (vals.length === 1) vals = [vals[0], vals[0]];
+    var w = 180, h = 34;
+    var min = Math.min.apply(null, vals), max = Math.max.apply(null, vals);
+    var rng = (max - min) || 1;
+    var n = vals.length;
+    var pts = vals.map(function (v, i) {
+      var x = i / (n - 1) * w;
+      var y = h - 2 - ((v - min) / rng) * (h - 6);
+      return [x, y];
+    });
+    // A smooth line that CANNOT overshoot. Each segment is a cubic whose two control points sit at
+    // the horizontal midpoint between neighbours - one at the start point's height, one at the
+    // end point's - so the curve eases between values but never bulges past either. A reflected-
+    // control spline (the old T shorthand) overshot on stepped data and drew the wiggles that made
+    // a tile reading "3" look like a rollercoaster. The stroke path still exposes exactly one
+    // ANCHOR per data point (the M, then the final pair of each C), which the render test reads as
+    // its vertices, and a flat series stays a level line.
+    var line = 'M' + pts[0][0].toFixed(1) + ' ' + pts[0][1].toFixed(1);
+    for (var si = 1; si < n; si++) {
+      var pa = pts[si - 1], pb = pts[si];
+      var mx = ((pa[0] + pb[0]) / 2).toFixed(1);
+      line += ' C' + mx + ' ' + pa[1].toFixed(1) + ' ' + mx + ' ' + pb[1].toFixed(1)
+            + ' ' + pb[0].toFixed(1) + ' ' + pb[1].toFixed(1);
+    }
+    var area = line + ' L' + w + ' ' + h + ' L0 ' + h + ' Z';
+    var gid = 'qspark' + (++sparkSeq);
+    var last = pts[pts.length - 1];
+    return '<svg class="spark" viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none"'
+      + ' aria-hidden="true" focusable="false">'
+      + '<defs><linearGradient id="' + gid + '" x1="0" y1="0" x2="0" y2="1">'
+      + '<stop offset="0" stop-color="var(--accent)" stop-opacity=".28"/>'
+      + '<stop offset="1" stop-color="var(--accent)" stop-opacity="0"/></linearGradient></defs>'
+      + '<path d="' + area + '" fill="url(#' + gid + ')"/>'
+      + '<path d="' + line + '" fill="none" stroke="var(--accent)" stroke-width="2"'
+      + ' stroke-linecap="round" stroke-linejoin="round"/>'
+      + '<circle cx="' + last[0].toFixed(1) + '" cy="' + last[1].toFixed(1) + '" r="2.6"'
+      + ' fill="var(--accent-2)"/></svg>';
+  }
+  function sparkNode(vals) {
+    return el('span', { class: 'spark-wrap', html: spark(vals) });
+  }
+
+  /* Fill percent (0..100) for a money tile's gradient meter, clamped, guarding a zero or missing
+     denominator. Kept pure and separate from the DOM so the render test can exercise the clamp. */
+  function meterPct(num, den) {
+    num = Number(num); den = Number(den);
+    if (!isFinite(num) || !isFinite(den) || den <= 0) return 0;
+    var p = num / den * 100;
+    return p < 0 ? 0 : (p > 100 ? 100 : p);
+  }
+  function meterNode(num, den) {
+    return el('div', { class: 'meter' }, [
+      el('i', { style: 'width:' + meterPct(num, den).toFixed(1) + '%' })
+    ]);
+  }
+
   function dashboardView(root) {
     root.appendChild(el('div', { class: 'page-head' }, [
-      /* No page-sub. The cards below say what this page is; a sentence restating it only
-         pushes the first real figure further down. */
+      /* Title only, no description subtitle. No action buttons:
+         search lives in the topbar and Status is a nav row, so the head stays clean. */
       el('div', {}, [
         el('h1', { class: 'page-title', text: 'Dashboard' })
-      ]),
-      el('div', { class: 'page-actions' }, [
-        el('a', { class: 'btn', href: '#/search', text: 'Search' }),
-        el('a', { class: 'btn', href: '#/status', text: 'Status' })
       ])
     ]));
 
@@ -4385,6 +4750,7 @@
         var counts = s.counts || {};
         var byStatus = s.leads_by_status || {};
         var byTarget = s.leads_by_target || {};
+        var byLeadClass = s.leads_by_class || {};
         var byClass = s.reports_by_class || {};
         var byState = s.reports_by_state || {};
         var byRepTarget = s.reports_by_target || {};
@@ -4405,13 +4771,26 @@
           var cur = moneyCur;
           /* `badge` names which delta from /api/unseen lands on this tile. Reports has none: it
              counts submissions, and no award moves that figure. */
+          /* `meter` is [numerator, denominator] for the tile's gradient bar - the SAME real ratio
+             the tile already states in words, never a fabricated one:
+               Total bounty / Awards  fraction of reports that carry an award (awards / reports)
+               My share               the reporter's cut of the confirmed total (my_share / total)
+               Reports                still-open share of every report (open / reports)
+             meterPct() clamps and guards a zero/missing denominator, so an un-synced checkout
+             renders an empty track rather than a NaN width. */
           var awardTiles = [
             { k: 'Total bounty', v: fmtMoney(money.total, cur), badge: 'total',
+              pill: money.awards + ' / ' + money.reports,
+              meter: [money.awards, money.reports],
               sub: money.awards + ' of ' + money.reports + ' reports carry an award' },
             { k: 'My share', v: fmtMoney(money.my_share, cur), badge: 'mine',
+              pill: money.total ? Math.min(100, money.my_share / money.total * 100).toFixed(1) + '%' : null,
+              meter: [money.my_share, money.total],
               sub: money.splits ? (money.splits + ' payout split' + (money.splits === 1 ? '' : 's'))
                                 : 'no payout splits' },
             { k: 'Awards', v: String(money.awards), badge: 'awards',
+              pill: 'reports',
+              meter: [money.awards, money.reports],
               sub: 'bounties awarded by the program' },
             /* The value reads "34 / 150" rather than the bare total, because on a card about
                earnings the live question is how much is still outstanding. The open count leads
@@ -4419,6 +4798,8 @@
                `open` is optional - an older server that does not send it degrades to the plain
                total rather than rendering "undefined / 150". */
             { k: 'Reports',
+              pill: money.reports + ' total',
+              meter: [money.open, money.reports],
               v: money.open === undefined || money.open === null
                 ? String(money.reports)
                 : [el('span', { class: 'mt-open', text: String(money.open) }),
@@ -4430,13 +4811,11 @@
                    + (money.as_collaborator
                       ? ' | ' + money.as_collaborator + ' as collaborator' : '')) }
           ];
-          var card = el('section', { class: 'card moneycard' }, [
-            el('div', { class: 'card-head' }, [
-              el('div', { class: 'card-title', text: 'Bounty' }),
-            ]),
-            /* EVERY dashboard drill-through into the Tracker carries program=all. The dashboard
-               counts every program (server.py entity_scope); the Tracker shows one by default.
-               Without this the list you land on is smaller than the number you clicked. */
+          var card = el('div', { class: 'moneycard' }, [
+            /* No wrapping panel and no "Bounty" header: the eyebrow above already labels the
+               section, matching the mockup. Just the four tiles in their grid. EVERY drill-through
+               carries program=all so the list matches the number clicked (the tile counts every
+               program; the Tracker defaults to the primary one). */
             el('div', { class: 'moneytiles' }, awardTiles.map(function (t) {
               /* `v` is a plain string on every tile but Reports, which composes two spans so the
                  open count can carry its own colour. Accept either rather than making three
@@ -4444,83 +4823,61 @@
               var value = Array.isArray(t.v)
                 ? el('span', { class: 'mt-v' }, t.v)
                 : el('span', { class: 'mt-v', text: t.v || '—' });
-              /* Same shape as the count tiles: the badge gets its own host so the timed repaint
-                 can clear it, rather than appending a second badge every minute. */
+              /* Tile anatomy ported from the mockup: label + stat pill on top, then the big
+                 number, then the delta-badge row, the gradient meter, and the caption. */
               var kRow = el('span', { class: 'mt-k' }, [el('span', { text: t.k })]);
+              if (t.pill) kRow.appendChild(el('span', { class: 'mt-pill', text: t.pill }));
+              var mtKids = [kRow, value];
+              /* The delta badges (new / updated / award) sit in their OWN row under the number,
+                 as in the mockup. The host keeps its reference so the timed repaint still finds
+                 it; only its position in the tile changed. */
               if (t.badge) {
-                moneyHosts[t.badge] = el('span', { class: 'tile-badges' });
-                kRow.appendChild(moneyHosts[t.badge]);
+                moneyHosts[t.badge] = el('span', { class: 'tile-badges mt-badges' });
+                mtKids.push(moneyHosts[t.badge]);
               }
+              if (t.meter) mtKids.push(meterNode(t.meter[0], t.meter[1]));
+              mtKids.push(el('span', { class: 'mt-s', text: t.sub }));
               /* program=all so the list matches the number that was just clicked: the tile counts
                  every program, while the Tracker itself defaults to the primary one. */
               return el('a', { class: 'moneytile',
-                               href: '#/reports?' + qsFrom({ program: ALL_PROGRAMS }) }, [
-                value,
-                kRow,
-                el('span', { class: 'mt-s', text: t.sub })
-              ]);
+                               href: '#/reports?' + qsFrom({ program: ALL_PROGRAMS }) }, mtKids);
             }))
           ]);
           moneyCard = card;
 
-          /* Anticipated awards. These keys are being added to /api/stats separately, so treat
-             them as optional: absent, unparseable or zero => render nothing extra rather than
-             a "$0" or "NaN" tile. The block is fenced off below the confirmed tiles and never
-             shares a total with them. */
-          var expTotal = parseMoney(money.expected_total);
-          var expCount = parseMoney(money.expected_awards);
-          if (expTotal !== null && expTotal > 0) {
-            var n = (expCount !== null && expCount > 0) ? Math.round(expCount) : null;
-            var combined = parseMoney(money.total);
-            card.appendChild(el('div', { class: 'money-sep' }, [
-              el('span', { class: 'ms-t', text: 'Not confirmed by HackerOne' }),
-              el('span', { class: 'ms-s',
-                text: 'Recorded by the researcher, pending payment. Kept out of every figure above.' })
-            ]));
-            card.appendChild(el('div', { class: 'moneytiles moneytiles-expected' }, [
-              el('a', {
-                class: 'moneytile moneytile-expected',
-                href: '#/reports?' + qsFrom({ anticipated: '1', program: ALL_PROGRAMS }),
-                title: EXPECTED_CAVEAT
-              }, [
-                el('span', { class: 'mt-v' }, [
-                  el('span', { text: fmtMoney(expTotal, cur) }),
-                  el('span', { class: 'exp-tag', text: 'expected' })
-                ]),
-                el('span', { class: 'mt-k', text: 'Anticipated' }),
-                el('span', { class: 'mt-s',
-                  text: n === null
-                    ? 'awaiting HackerOne confirmation'
-                    : 'across ' + n + ' report' + (n === 1 ? '' : 's') + ', awaiting confirmation' })
-              ])
-            ]));
-            if (combined !== null) {
-              /* The only place the two are added up, and it says so in full. */
-              card.appendChild(el('p', { class: 'money-potential', text:
-                'Potential total (confirmed + anticipated): ' + fmtMoney(combined + expTotal, cur) +
-                ' = ' + fmtMoney(combined, cur) + ' confirmed + ' + fmtMoney(expTotal, cur) +
-                ' anticipated.' }));
-            }
-          }
-
+          /* Section eyebrow, matching the mockup's BOUNTY / OVERVIEW / BREAKDOWN rhythm. Appended
+             just before its section so the label leads it in source order (desktop). Hidden on the
+             phone, where the .dash-host reorder swaps Bounty and Overview and a fixed label would
+             read against the wrong section. */
+          host.appendChild(el('div', { class: 'dash-eyebrow', text: 'Bounty' }));
           host.appendChild(card);
         }
 
         /* 2. counts */
+        /* `spark` names this tile's series in s.sparklines (server-computed cumulative counts).
+           Absent on an old server => no sparkline, never a broken tile. Targets reads the SCOPES
+           series because the tile counts scopes, not the local targets table (see below). */
+        var sparks = s.sparklines || {};
         var tiles = [
-          { k: 'Leads', n: counts.leads, href: '#/leads', watch: 'leads' },
-          { k: 'Reports', n: counts.reports, href: '#/reports', watch: 'reports' },
-          { k: 'Advisories', n: counts.advisories, href: '#/advisories', watch: 'advisories' },
-          { k: 'Programs', n: counts.programs, href: '#/programs' },
+          { k: 'Leads', n: counts.leads, href: '#/leads', watch: 'leads', spark: 'leads' },
+          { k: 'Reports', n: counts.reports, href: '#/reports', watch: 'reports', spark: 'reports' },
+          { k: 'Advisories', n: counts.advisories, href: '#/advisories', watch: 'advisories',
+            spark: 'advisories' },
+          { k: 'Programs', n: counts.programs, href: '#/programs', spark: 'programs' },
           /* counts.scopes, not counts.targets: the tab lists the 970 HackerOne assets, while
              `targets` is the 3 local workspace directories. A tile that disagrees with the page
              it opens is worse than no tile. */
-          { k: 'Targets', n: counts.scopes, href: '#/targets' },
+          { k: 'Targets', n: counts.scopes, href: '#/targets', spark: 'scopes' },
+          /* Fixes DUE a retest, not resolved reports - the tile is a to-do, and a count of every
+             fix we ever earned would sit there unchanged forever. It opens the bucket it counts.
+             A zero is the honest reading on a console that has never synced, and the tab says so
+             when you get there. */
+          { k: 'Retests due', n: (s.regression || {}).due, href: '#/regression?bucket=due', spark: 'regression' },
           /* Replaced the Uploads tile: an upload count says nothing about the state of a hunt,
              where the size of the payload arsenal is a live figure worth seeing. A zero here
              means the arsenal has never been synced (scripts/sync-payloads.sh), which is
              exactly when you want to notice. Uploads are still counted on the Status page. */
-          { k: 'Payloads', n: counts.payloads, href: '#/payloads' }
+          { k: 'Payloads', n: counts.payloads, href: '#/payloads', spark: 'payloads' }
         ];
         /* Badges hang in their own span rather than being appended straight to the label row,
            because the tiles are repainted on a timer now: without a host to clear, every refresh
@@ -4532,12 +4889,19 @@
             badgeHosts[t.watch] = el('span', { class: 'tile-badges' });
             kRow.appendChild(badgeHosts[t.watch]);
           }
-          return el('a', { class: 'card tile', href: t.href }, [
+          var tileKids = [
             el('span', { class: 'n', text: String(t.n === undefined || t.n === null ? '—' : t.n) }),
             kRow
-          ]);
+          ];
+          /* Sparkline last, under the number and label, matching the mockup. Only when the server
+             sent a series for it - and it never displaces the .n, .k or .tile-badges host, so the
+             badge repaint (which walks badgeHosts[e].parentNode.parentNode to the tile) is intact. */
+          var sv = sparks[t.spark];
+          if (sv && sv.length) tileKids.push(sparkNode(sv));
+          return el('a', { class: 'card tile', href: t.href }, tileKids);
         }));
 
+        host.appendChild(el('div', { class: 'dash-eyebrow', text: 'Overview' }));
         host.appendChild(tilesEl);
 
         /* Badge the tiles the user asked to be alerted on. Counts come from the server, the
@@ -4662,31 +5026,26 @@
            taller as cards are added, which is why a fifth card does not strand one card alone on
            a row the way a quadrant did. Hacktivity sits at the top of its column at its natural
            height rather than stretching to match. */
+        host.appendChild(el('div', { class: 'dash-eyebrow', text: 'Breakdown' }));
         host.appendChild(el('div', { class: 'dash-split' }, [
           el('div', { class: 'dash-col' }, [
-            /* Reports first, leads under them. A report is a result and a lead is work in
-               progress, and the column is read top down. */
+            /* Left column reports, right column leads, read top down. Each row pairs a reports card
+               with a leads card at a matching grain: state/status, the two paid-by-target kinds,
+               then the two by-class. */
             breakdownCard('Reports by state', byState, {
               statusColors: true,
               hrefFor: function (k) {
                 return '#/reports?' + qsFrom({ status: k, program: ALL_PROGRAMS });
               }
             }),
-            /* PAID reports only, here and on the target card below. A submission is an attempt;
-               an award is a result, so this answers "what kind of bug actually earns" rather
-               than "what did I file". The drill-down carries paid=1 so the list returns exactly
-               the rows counted here - without it the card would say 19 and the page would show
-               72. Classes for API-only reports are derived from the CWE, see common.CWE_CLASS. */
-            breakdownCard('Paid reports by class', byClass, {
-              limit: 12,
-              hrefFor: function (k) {
-                return '#/reports?' + qsFrom({ 'class': k, paid: '1', program: ALL_PROGRAMS });
-              }
+            /* Ranked by tally, biggest first. */
+            breakdownCard('Leads by status', byStatus, {
+              statusColors: true,
+              hrefFor: function (k) { return '#/leads?' + qsFrom({ status: k }); }
             }),
-            /* Thinner than the class card on purpose: a report the API owns has no local file
-               and so no target. 'unknown' is the no-target bucket rather than a target, so it is
-               dropped here and on the leads card - it cannot be clicked through to anything and
-               it outranks real targets on tally. */
+            /* Thinner than the class card on purpose: a report the API owns has no local file and
+               so no target. 'unknown' is the no-target bucket rather than a target, so it is dropped
+               here and on the leads card. */
             breakdownCard('Paid reports by target', byRepTarget, {
               limit: 12, omit: ['unknown'],
               /* The key is a target slug where the report has one and a PROGRAM handle where it
@@ -4700,17 +5059,22 @@
                   : { program: k, paid: '1' });
               }
             }),
-            /* Ranked by tally, biggest first. It used to pin a fixed status order, which put
-               whatever was most numerous wherever that list happened to place it - killed led on
-               count and rendered third - and dumped any status missing from the list at the
-               bottom regardless of size. */
-            breakdownCard('Leads by status', byStatus, {
-              statusColors: true,
-              hrefFor: function (k) { return '#/leads?' + qsFrom({ status: k }); }
+            /* PAID reports only. A submission is an attempt; an award is a result, so this answers
+               "what kind of bug actually earns". The drill-down carries paid=1 so the list returns
+               exactly the rows counted here. Classes for API-only reports are derived from the CWE. */
+            breakdownCard('Paid reports by class', byClass, {
+              limit: 12,
+              hrefFor: function (k) {
+                return '#/reports?' + qsFrom({ 'class': k, paid: '1', program: ALL_PROGRAMS });
+              }
             }),
             breakdownCard('Leads by target', byTarget, {
               limit: 12, omit: ['unknown'],
               hrefFor: function (k) { return '#/leads?' + qsFrom({ target: k }); }
+            }),
+            breakdownCard('Leads by class', byLeadClass, {
+              limit: 12,
+              hrefFor: function (k) { return '#/leads?' + qsFrom({ 'class': k }); }
             })
           ]),
           /* Wrapped, not bare. See .dash-side: the wrapper is what the grid stretches to the
@@ -4739,8 +5103,7 @@
 
     root.appendChild(el('div', { class: 'page-head' }, [
       el('div', {}, [
-        el('h1', { class: 'page-title', text: 'Files' }),
-        el('p', { class: 'page-sub', text: 'Raw filesystem browser over the configured browse roots. Denied paths are shown, not hidden.' })
+        el('h1', { class: 'page-title', text: 'Files' })
       ]),
     ]));
 
@@ -4780,6 +5143,7 @@
         .then(function (data) {
           data = data || {};
           var entries = data.entries || [];
+          var dirPath = data.path !== undefined && data.path !== null ? data.path : path;
           clear(treeCard);
           treeCard.appendChild(breadcrumbs(data.path !== undefined ? data.path : path, data.parent));
 
@@ -4788,28 +5152,48 @@
             return;
           }
 
-          entries = entries.slice().sort(function (a, b) {
-            if (!!a.is_dir !== !!b.is_dir) return a.is_dir ? -1 : 1;
-            return String(a.name || '').localeCompare(String(b.name || ''));
-          });
+          /* Fetched once. The filter box and the sortable column headers below re-render only the
+             table, never re-fetch: `query` and `sort` are local state and renderTable() applies both
+             to the entries already in hand. */
+          var query = '';
+          var sort = '';   /* '' = the default order: directories first, then name (A->Z). */
 
-          treeCard.appendChild(dataTable([
+          /* Filter box, under the breadcrumbs. Narrows the CURRENT directory by name as you type. */
+          var filterInput = el('input', {
+            type: 'search', placeholder: 'Filter this directory…', spellcheck: 'false'
+          });
+          filterInput.addEventListener('input', function () { query = filterInput.value; renderTable(); });
+          treeCard.appendChild(el('label', { class: 'field fs-filter' }, [
+            el('span', { class: 'field-label', text: 'Filter' }), filterInput
+          ]));
+
+          /* The table and the deny-list note each get their own host so a filter or a re-sort swaps
+             just those nodes, leaving the breadcrumbs and the filter box in place. */
+          var tableHost = el('div', { class: 'fs-tablehost' });
+          var noteHost = el('div', { class: 'fs-note' });
+          treeCard.appendChild(tableHost);
+          treeCard.appendChild(noteHost);
+
+          var columns = [
             {
-              key: 'name', label: 'Name', cls: 'cell-title cell-max',
+              key: 'name', label: 'Name', sort: 'name', cls: 'cell-title cell-max',
               render: function (e) {
                 return frag([
                   el('span', { class: 'ftype', text: e.is_dir ? '▸' : '·' }),
                   el('span', { text: e.name || e.path || '' }),
                   e.denied ? ' ' : null,
-                  e.denied ? el('span', { class: 'lock', text: 'denied' }) : null
+                  e.denied ? el('span', { class: 'lock', text: 'filtered' }) : null
                 ]);
               }
             },
             {
-              key: 'size', label: 'Size', cls: 'nowrap tiny dim',
+              key: 'size', label: 'Size', sort: 'size', cls: 'nowrap tiny dim',
               render: function (e) { return e.is_dir ? '' : fmtBytes(e.size); }
             },
-            { key: 'mtime', label: 'Modified', cls: 'nowrap tiny dim', render: function (e) { return fmtTime(e.mtime); } },
+            {
+              key: 'mtime', label: 'Modified', sort: 'mtime', cls: 'nowrap tiny dim',
+              render: function (e) { return fmtTime(e.mtime); }
+            },
             {
               key: 'dl', label: '', cls: 'nowrap',
               render: function (e) {
@@ -4821,23 +5205,70 @@
                 });
               }
             }
-          ], entries, {
-            idKey: 'path',
-            selectedId: file,
-            rowClass: function (e) { return e.denied ? 'denied' : ''; },
-            rowDisabled: function (e) { return !!e.denied; },
-            onRow: function (e) {
-              if (e.denied) return;
-              if (e.is_dir) goto(e.path, '');
-              else goto(data.path !== undefined && data.path !== null ? data.path : path, e.path);
-            }
-          }));
+          ];
 
-          var deniedCount = entries.filter(function (e) { return e.denied; }).length;
-          if (deniedCount) {
-            treeCard.appendChild(el('div', { class: 'pager' },
-              el('span', { text: deniedCount + ' entr' + (deniedCount === 1 ? 'y is' : 'ies are') + ' blocked by config.browse_deny_globs and cannot be opened.' })));
+          /* Directories first, then name, is the default with no column sort active. A column sort
+             replaces it wholesale: Size and Modified compare numerically (bytes, mtime), Name
+             alphabetically, and a leading '-' means descending. */
+          function sortEntries(rows) {
+            var desc = sort.charAt(0) === '-';
+            var key = desc ? sort.slice(1) : sort;
+            var sorted = rows.slice();
+            if (!key) {
+              sorted.sort(function (a, b) {
+                if (!!a.is_dir !== !!b.is_dir) return a.is_dir ? -1 : 1;
+                return String(a.name || '').localeCompare(String(b.name || ''));
+              });
+              return sorted;
+            }
+            sorted.sort(function (a, b) {
+              if (key === 'size') return (Number(a.size) || 0) - (Number(b.size) || 0);
+              if (key === 'mtime') return (Number(a.mtime) || 0) - (Number(b.mtime) || 0);
+              return String(a.name || '').localeCompare(String(b.name || ''));
+            });
+            if (desc) sorted.reverse();
+            return sorted;
           }
+
+          function renderTable() {
+            var needle = query.trim().toLowerCase();
+            var rows = needle
+              ? entries.filter(function (e) {
+                  return String(e.name || e.path || '').toLowerCase().indexOf(needle) >= 0;
+                })
+              : entries;
+            rows = sortEntries(rows);
+
+            clear(tableHost);
+            if (!rows.length) {
+              tableHost.appendChild(empty(needle ? 'Nothing here matches your filter.' : 'Empty directory'));
+            } else {
+              tableHost.appendChild(dataTable(columns, rows, {
+                idKey: 'path',
+                selectedId: file,
+                sort: sort,
+                onSort: function (next) { sort = next; renderTable(); },
+                rowClass: function (e) { return e.denied ? 'denied' : ''; },
+                rowDisabled: function (e) { return !!e.denied; },
+                onRow: function (e) {
+                  if (e.denied) return;
+                  if (e.is_dir) goto(e.path, '');
+                  else goto(dirPath, e.path);
+                }
+              }));
+            }
+
+            /* The deny-list note counts the rows actually on screen, so it never claims entries the
+               filter has already hidden. */
+            clear(noteHost);
+            var deniedCount = rows.filter(function (e) { return e.denied; }).length;
+            if (deniedCount) {
+              noteHost.appendChild(el('div', { class: 'pager' },
+                el('span', { text: deniedCount + ' entr' + (deniedCount === 1 ? 'y is' : 'ies are') + ' hidden by config.browse_deny_globs.' })));
+            }
+          }
+
+          renderTable();
         })
         .catch(function (err) {
           clear(treeCard);
@@ -4960,8 +5391,7 @@
 
     root.appendChild(el('div', { class: 'page-head' }, [
       el('div', {}, [
-        el('h1', { class: 'page-title', text: 'Search' }),
-        el('p', { class: 'page-sub', text: 'Full-text across leads, reports, advisories and programs.' })
+        el('h1', { class: 'page-title', text: 'Search' })
       ])
     ]));
 
@@ -5074,8 +5504,7 @@
 
     root.appendChild(el('div', { class: 'page-head' }, [
       el('div', {}, [
-        el('h1', { class: 'page-title', text: 'Payloads' }),
-        el('p', { class: 'page-sub', text: 'Attack payloads from the local PayloadsAllTheThings clone, one row per documented block.' })
+        el('h1', { class: 'page-title', text: 'Payloads' })
       ])
     ]));
 
@@ -5100,7 +5529,7 @@
     }
     var catSel = selectEl(categoryOptions(), category, function (v) { run({ category: v }); });
 
-    root.appendChild(el('div', { class: 'filters card' }, [
+    var filters = el('div', { class: 'filters card' }, [
       el('label', { class: 'field grow' }, [el('span', { class: 'field-label', text: 'Query' }), input]),
       field('Category', catSel),
       field('Limit', selectEl([25, 50, 100, 200], limit, function (v) { run({ limit: v }); })),
@@ -5108,7 +5537,9 @@
         el('span', { class: 'field-label', text: ' ' }),
         el('button', { class: 'btn btn-primary', type: 'button', text: 'Search', onclick: function () { run({}); } })
       ])
-    ]));
+    ]);
+    root.appendChild(filtersToolbar(filters, { startOpen: !!(q || category) }));
+    root.appendChild(filters);
 
     var host = el('div', {});
     root.appendChild(host);
@@ -5170,8 +5601,7 @@
   function tokensView(root) {
     root.appendChild(el('div', { class: 'page-head' }, [
       el('div', {}, [
-        el('h1', { class: 'page-title', text: 'API tokens' }),
-        el('p', { class: 'page-sub', text: 'Bearer tokens for non-browser clients. Only the hash is stored server-side.' })
+        el('h1', { class: 'page-title', text: 'API Tokens' })
       ])
     ]));
 
@@ -5194,8 +5624,10 @@
       ]));
     }
 
-    /* create */
-    var nameInput = el('input', { type: 'text', placeholder: 'ingest box, laptop cli…', spellcheck: 'false' });
+    /* --- create ------------------------------------------------------------
+       Same controls, endpoint and state as before; only the framing is new. The name grows to
+       fill the row, the scope select and the primary action sit beside it. */
+    var nameInput = el('input', { type: 'text', spellcheck: 'false' });
     var scopeSel = selectEl([{ value: 'read', label: 'read' }, { value: 'write', label: 'write' }], 'read');
     var createErr = el('div', {});
     var createBtn = el('button', { class: 'btn btn-primary', type: 'button', text: 'Create token' });
@@ -5227,67 +5659,96 @@
         });
     });
 
+    root.appendChild(el('div', { class: 'tab-eyebrow', text: 'New token' }));
     root.appendChild(el('section', { class: 'card' }, [
-      el('div', { class: 'card-title', text: 'New token' }),
       el('div', { class: 'pane-body' }, [
         createErr,
-        el('div', { class: 'form-grid' }, [
-          field('Name', nameInput),
-          field('Scope', scopeSel, 'read tokens are rejected on every mutating verb')
-        ]),
-        el('div', { class: 'form-actions' }, createBtn)
+        el('div', { class: 'tokencreate' }, [
+          el('label', { class: 'field' }, [
+            el('span', { class: 'field-label' }, [
+              document.createTextNode('Name '),
+              infoBadge('A name to tell your tokens apart later, like the client, box or script that uses it.')
+            ]),
+            nameInput
+          ]),
+          field('Scope', scopeSel),
+          createBtn
+        ])
       ])
     ]));
 
-    var listCard = el('section', { class: 'card' }, el('div', { class: 'card-title', text: 'Existing tokens' }));
-    root.appendChild(listCard);
+    root.appendChild(el('div', { class: 'tab-eyebrow eyebrow-info' }, [
+      el('span', { text: 'Existing tokens' }),
+      infoBadge('Bearer requests are CSRF-exempt (no ambient credential). Browser sessions must always send ' + CSRF_HEADER + ': 1.')
+    ]));
     var listHost = el('div', {});
-    listCard.appendChild(listHost);
+    root.appendChild(listHost);
+
+    /* The read/write scope boundary is a kept feature: read carries a calm info tint, write the
+       app's own accent so the elevated one stands out at a glance. */
+    function scopePill(scope) {
+      var s = String(scope || '').toLowerCase() === 'write' ? 'write' : 'read';
+      return el('span', { class: 'scopepill scope-' + s, text: s });
+    }
+
+    function tokenFact(label, value) {
+      return el('div', { class: 'tk-fact' }, [
+        el('span', { class: 'tk-k', text: label }),
+        el('span', { class: 'tk-v', text: value })
+      ]);
+    }
+
+    function tokenRow(r) {
+      var main = el('div', { class: 'tk-main' }, [
+        el('div', { class: 'tk-name', text: r.name || ('token #' + r.id) }),
+        el('div', { class: 'tk-prefix', text: (r.prefix || '') + '…' })
+      ]);
+      var facts = el('div', { class: 'tk-facts' }, [
+        tokenFact('Created', fmtDateOnly(r.created_at) || '—'),
+        tokenFact('Last used', r.last_used ? fmtTime(r.last_used) : 'never')
+      ]);
+      var side = el('div', { class: 'tk-side' });
+      if (r.revoked) {
+        side.appendChild(el('span', { class: 'pill pill-killed', text: 'revoked' }));
+      } else {
+        side.appendChild(el('span', { class: 'pill pill-submitted', text: 'active' }));
+        var b = el('button', { class: 'btn btn-sm btn-danger', type: 'button', text: 'Revoke' });
+        b.addEventListener('click', function () {
+          if (!window.confirm('Revoke token "' + (r.name || r.id) + '"? Clients using it will start getting 401s.')) return;
+          b.disabled = true;
+          api('/tokens/' + encodeURIComponent(r.id) + '/revoke', { method: 'POST' })
+            .then(function () { toast('Token revoked.', 'ok'); load(); })
+            .catch(function (err) { b.disabled = false; toastError(err); });
+        });
+        side.appendChild(b);
+      }
+      return el('div', { class: 'tokenrow' + (r.revoked ? ' is-revoked' : '') },
+        [main, scopePill(r.scope), facts, side]);
+    }
 
     function load() {
       clear(listHost);
-      append(listHost, loading('Loading tokens…'));
+      listHost.appendChild(el('section', { class: 'card' }, el('div', { class: 'pane-body' }, loading('Loading tokens…'))));
       api('/tokens').then(function (data) {
         var items = (data && data.items) || [];
         clear(listHost);
-        if (!items.length) { listHost.appendChild(empty('No API tokens yet')); return; }
-        listHost.appendChild(dataTable([
-          { key: 'id', label: 'ID', cls: 'cell-mono nowrap' },
-          { key: 'name', label: 'Name', cls: 'cell-title' },
-          { key: 'prefix', label: 'Prefix', cls: 'cell-mono nowrap', render: function (r) { return (r.prefix || '') + '…'; } },
-          { key: 'scope', label: 'Scope', cls: 'nowrap', render: function (r) { return tag(r.scope); } },
-          { key: 'created_at', label: 'Created', cls: 'nowrap tiny dim', render: function (r) { return fmtTime(r.created_at); } },
-          { key: 'last_used', label: 'Last used', cls: 'nowrap tiny dim', render: function (r) { return r.last_used ? fmtTime(r.last_used) : 'never'; } },
-          {
-            key: 'revoked', label: 'Status', cls: 'nowrap',
-            render: function (r) { return r.revoked ? pill('killed') : pill('confirmed'); }
-          },
-          {
-            key: 'act', label: '', cls: 'nowrap',
-            render: function (r) {
-              if (r.revoked) return el('span', { class: 'muted', text: 'revoked' });
-              var b = el('button', { class: 'btn btn-sm btn-danger', type: 'button', text: 'Revoke' });
-              b.addEventListener('click', function () {
-                if (!window.confirm('Revoke token "' + (r.name || r.id) + '"? Clients using it will start getting 401s.')) return;
-                b.disabled = true;
-                api('/tokens/' + encodeURIComponent(r.id) + '/revoke', { method: 'POST' })
-                  .then(function () { toast('Token revoked.', 'ok'); load(); })
-                  .catch(function (err) { b.disabled = false; toastError(err); });
-              });
-              return b;
-            }
-          }
-        ], items, {}));
+        var card = el('section', { class: 'card tokenlist' }, el('div', { class: 'bd-head tk-head' }, [
+          el('span', { class: 'card-title', text: 'Tokens' }),
+          el('span', { class: 'bd-count', text: items.length + (items.length === 1 ? ' token' : ' tokens') })
+        ]));
+        if (!items.length) {
+          card.appendChild(empty('No API tokens yet', 'Mint one above for a CLI client or the ingest box.'));
+        } else {
+          card.appendChild(el('div', { class: 'tokenrows' }, items.map(tokenRow)));
+        }
+        listHost.appendChild(card);
       }).catch(function (err) {
         clear(listHost);
-        append(listHost, el('div', { class: 'pane-body' }, errorPanel(err, load)));
+        listHost.appendChild(el('section', { class: 'card' }, el('div', { class: 'pane-body' }, errorPanel(err, load))));
       });
     }
 
     load();
-
-    root.appendChild(el('div', { class: 'alert alert-info tiny' },
-      'Bearer requests are CSRF-exempt (no ambient credential). Browser sessions must always send ' + CSRF_HEADER + ': 1.'));
   }
 
   /* ================================================================== tools */
@@ -5378,10 +5839,13 @@
     ]);
   }
 
-  function statusCard(title, verdict, rows, actions) {
+  function statusCard(title, verdict, rows, actions, info) {
     return el('section', { class: 'card statuscard' }, [
       el('div', { class: 'statuscard-head' }, [
-        el('h2', { class: 'card-title', text: title }),
+        el('span', { class: 'sc-titlewrap' }, [
+          el('h2', { class: 'card-title', text: title }),
+          info ? infoBadge(info) : null
+        ]),
         verdict || null
       ]),
       el('div', { class: 'srows' }, rows.filter(Boolean)),
@@ -5389,58 +5853,60 @@
     ]);
   }
 
-  /* ------------------------------------------------------------ polling schedule
-     One editable row per cron job, in minutes. The value is written to config.json and installed
-     into the crontab in one request; see POST /api/schedule. */
+  /* ------------------------------------------------------------ automation cadence
+     One editable number box per cron job, in minutes, written to config.json and installed into
+     the crontab in one request; see POST /api/schedule. The box is the loud element of its row:
+     the job it drives sits to its left and nothing else competes with it, so "what can I change,
+     and where" is answered by the layout alone. Settings owns its own .set-* classes; the shared
+     .statuscard/.srow rules stay with the read-only Status page. */
   function scheduleCard(sched, reload) {
     var jobs = sched.jobs || [];
     var inputs = {};
 
-    /* in_sync is null when the crontab could not be read at all, which is a different state from
-       "read it, and it disagrees". Only the second one is a warning the user can act on. */
-    var verdict = sched.error ? healthPill('bad', 'cron unreadable')
-      : (sched.in_sync === false ? healthPill('warn', 'crontab differs')
-        : healthPill('ok', 'installed'));
+    /* A small state chip, not a status panel: installed is the quiet good case, and the other two
+       are the only states worth a colour. in_sync is null when the crontab could not be read at
+       all, which is a different state from "read it, and it disagrees". */
+    var state = sched.error
+      ? el('span', { class: 'pill pill-killed', text: 'cron unreadable' })
+      : (sched.in_sync === false
+          ? el('span', { class: 'pill pill-open', text: 'crontab differs' })
+          : el('span', { class: 'pill pill-submitted', text: 'installed' }));
 
-    /* The control reads as a sentence - "every [15] minutes" - rather than a bare number box
-       tagged with a unit and trailed by the raw cron field. The cron string was the literal
-       output of what this card configures, which made it noise sitting in the widest column of
-       every row; anyone who wants it can read the crontab. */
     var rows = jobs.map(function (j) {
       var input = el('input', {
-        class: 'sched-input', type: 'number', min: String(sched.min || 1),
+        class: 'set-num', type: 'number', min: String(sched.min || 1),
         max: String(sched.max || 1440), step: '1', value: String(j.minutes),
-        title: 'cron: ' + j.cron
+        'aria-label': j.label, title: 'cron: ' + j.cron
       });
       inputs[j.key] = input;
-      var row = el('div', { class: 'sched-row' }, [
-        el('div', { class: 'sched-label' }, [
-          el('span', { class: 'sched-name', text: j.label }),
-          el('span', { class: 'sched-desc', text: j.desc || '' })
+      var row = el('div', { class: 'set-row' }, [
+        el('div', { class: 'set-info' }, [
+          el('span', { class: 'set-name', text: j.label }),
+          j.desc ? el('span', { class: 'set-hint', text: j.desc }) : null
         ]),
-        el('div', { class: 'sched-ctl' }, [
-          el('span', { class: 'sched-every', text: 'every' }),
+        el('div', { class: 'set-ctl' }, [
           input,
-          el('span', { class: 'sched-unit', text: 'minutes' })
+          el('span', { class: 'set-unit', text: 'min' })
         ])
       ]);
       /* Only when it applies. A value that went in cleanly carries no explanation at all. */
       if (j.snapped_from) {
-        row.appendChild(el('div', { class: 'sched-snap',
-          text: 'Asked for ' + j.snapped_from + ' minutes. Cron cannot divide the hour by that, '
-              + 'so it is running every ' + j.minutes + '.' }));
+        row.appendChild(el('div', { class: 'set-snap',
+          text: 'Snapped to every ' + j.minutes + ' min: cron cannot divide the hour by '
+              + j.snapped_from + '.' }));
       }
       return row;
     });
 
     (sched.fixed || []).forEach(function (f) {
-      rows.push(el('div', { class: 'sched-row sched-row-fixed' }, [
-        el('div', { class: 'sched-label' }, [
-          el('span', { class: 'sched-name', text: f.label }),
-          el('span', { class: 'sched-desc', text: f.desc || '' })
+      rows.push(el('div', { class: 'set-row set-row-fixed' }, [
+        el('div', { class: 'set-info' }, [
+          el('span', { class: 'set-name', text: f.label }),
+          f.desc ? el('span', { class: 'set-hint', text: f.desc }) : null
         ]),
-        el('div', { class: 'sched-ctl' }, [
-          el('span', { class: 'sched-fixedwhen', text: f.when || f.cron })
+        el('div', { class: 'set-ctl' }, [
+          el('span', { class: 'set-fixed', text: f.when || f.cron }),
+          el('span', { class: 'pill pill-neutral', text: 'fixed' })
         ])
       ]));
     });
@@ -5471,20 +5937,20 @@
         });
     });
 
-    var body = el('div', { class: 'sched-rows' }, rows);
-    var card = statusCard('Polling schedule', verdict, [], [saveBtn]);
-    /* statusCard builds head/rows/actions; the editor goes between the rows and the actions. */
-    var actions = card.querySelector('.statuscard-actions');
-    if (actions) card.insertBefore(body, actions);
-    else card.appendChild(body);
-    card.appendChild(el('p', { class: 'status-note' },
-      'Intervals snap to a value that divides the hour evenly, so "every N minutes" stays true ' +
-      'across the hour boundary. Jobs are staggered by a fixed offset each so they do not all ' +
-      'fire on the same tick. Everything outside the managed block in your crontab is left alone.'));
+    var body = el('div', { class: 'pane-body' }, [
+      el('div', { class: 'set-rows' }, rows),
+      el('div', { class: 'set-actions' }, [saveBtn])
+    ]);
     if (sched.error) {
-      card.appendChild(el('p', { class: 'status-note', text: 'crontab: ' + sched.error }));
+      body.appendChild(el('p', { class: 'set-error', text: 'crontab: ' + sched.error }));
     }
-    return card;
+    return el('section', { class: 'card' }, [
+      el('div', { class: 'card-title set-head' }, [
+        el('span', { text: 'Automation cadence' }),
+        state
+      ]),
+      body
+    ]);
   }
 
   /* ---------------------------------------------------------------- settings
@@ -5493,12 +5959,71 @@
      believes, with no control on it that can alter anything. The two were one page until
      2026-08-03, which made "check whether the poller is healthy" and "change how often it runs"
      the same page, and the health half is looked at ten times as often. */
+  /* Retest window: how many days after a report closes the Regression tab calls its fix due for a
+     retest. Backed by the same POST /settings the session card uses (regression_window_days is in
+     SETTINGS_FIELDS), so it needs no new endpoint. */
+  function regressionCard(cfg, reload) {
+    var card = el('section', { class: 'card' });
+    var stored = parseInt(cfg.regression_window_days, 10);
+    if (isNaN(stored) || stored < 1) stored = 30;
+    var days = stored;
+
+    function draw() {
+      clear(card);
+      var daysInput = el('input', {
+        class: 'set-num', type: 'number', min: '1', max: '3650', step: '1',
+        value: String(days), 'aria-label': 'Days after a report closes before a retest is due'
+      });
+      daysInput.addEventListener('input', function () {
+        var v = parseInt(daysInput.value, 10);
+        if (!isNaN(v)) days = v;
+      });
+
+      var saveBtn = el('button', { class: 'btn btn-primary', type: 'button', text: 'Save' });
+      saveBtn.addEventListener('click', function () {
+        var send = parseInt(daysInput.value, 10);
+        if (isNaN(send) || send < 1 || send > 3650) { toast('Days must be between 1 and 3650', 'err'); return; }
+        saveBtn.disabled = true;
+        api('/settings', { method: 'POST', body: { regression_window_days: send } })
+          .then(function () {
+            toast('Retest window set to ' + send + ' day' + (send === 1 ? '' : 's'), 'ok');
+            reload();
+          })
+          .catch(function (e) { saveBtn.disabled = false; toast(String((e && e.message) || e), 'err'); });
+      });
+
+      var actions = el('div', { class: 'set-actions' }, [saveBtn]);
+      if (days !== stored) actions.appendChild(el('span', { class: 'set-dirty', text: 'Unsaved changes' }));
+
+      append(card, [
+        el('div', { class: 'card-title set-head' }, [
+          el('span', { text: 'Retest window' }),
+          el('span', { class: 'pill pill-submitted', text: stored + ' day' + (stored === 1 ? '' : 's') })
+        ]),
+        el('div', { class: 'pane-body' }, [
+          el('div', { class: 'set-rows' }, [
+            el('div', { class: 'set-row' }, [
+              el('div', { class: 'set-info' }, [
+                el('span', { class: 'set-name', text: 'Days after a report closes before a retest is due' }),
+                el('span', { class: 'set-hint', text: 'Drives the Regression tab queue.' })
+              ]),
+              el('div', { class: 'set-ctl' }, [
+                daysInput, el('span', { class: 'set-unit', text: 'days' })
+              ])
+            ])
+          ]),
+          actions
+        ])
+      ]);
+    }
+    draw();
+    return card;
+  }
+
   function settingsView(root) {
     root.appendChild(el('div', { class: 'page-head' }, [
       el('div', {}, [
-        el('h1', { class: 'page-title', text: 'Settings' }),
-        el('p', { class: 'page-sub',
-                  text: 'Job cadence and session behaviour. Status reports; this page changes.' })
+        el('h1', { class: 'page-title', text: 'Settings' })
       ])
     ]));
 
@@ -5508,22 +6033,14 @@
     function load() {
       clear(host);
       append(host, loading('Loading…'));
-      Promise.all([
-        api('/settings'),
-        api('/schedule').catch(function () { return null; })
-      ]).then(function (res) {
-        var cfg = res[0] || {};
-        var sched = res[1];
+      api('/settings').then(function (cfg) {
+        cfg = cfg || {};
         clear(host);
-        /* Cadence first: it is changed far more often than the session timeout, which is set
-           once and then left alone. */
-        if (sched) {
-          host.appendChild(scheduleCard(sched, load));
-        } else {
-          host.appendChild(statusCard('Schedule', healthPill('bad', 'unavailable'),
-            [statusRow('Reason', 'The schedule module did not answer. Cadence cannot be changed '
-                               + 'from here until it does.')], []));
-        }
+        /* Each group leads with an eyebrow so the concerns read apart, matching the dashboard's
+           section rhythm. */
+        host.appendChild(el('div', { class: 'tab-eyebrow', text: 'Regression' }));
+        host.appendChild(regressionCard(cfg, load));
+        host.appendChild(el('div', { class: 'tab-eyebrow', text: 'Session' }));
         host.appendChild(sessionCard(cfg, load));
       }).catch(function (err) {
         clear(host);
@@ -5534,24 +6051,24 @@
   }
 
   /* The session timeout. Off by default: one operator, bound to loopback, and being logged out
-     mid-hunt cost more than the timer ever bought. The trade is stated on the card rather than
-     buried, because the box holds unreported findings.
+     mid-hunt cost more than the timer ever bought.
 
      The whole card REDRAWS on toggle. It first shipped computing its rows once and mutating only
-     the button label and the input's disabled flag, so the state rows and the verdict pill kept
-     saying "never" after you turned expiry on - which read as a control that does nothing. Any
-     card whose text is derived from a value the user can change has to redraw, not patch. */
+     the button label and the input's disabled flag, so the state chip and the hint kept saying
+     "never" after you turned expiry on, which read as a control that does nothing. Any card whose
+     text is derived from a value the user can change has to redraw, not patch. */
   function sessionCard(cfg, reload) {
-    var card = el('section', { class: 'card statuscard' });
+    var card = el('section', { class: 'card' });
     var on = !!cfg.session_expiry_enabled;
     var hours = cfg.session_hours > 0 ? cfg.session_hours : 12;
 
     function draw() {
       clear(card);
+      var stored = !!cfg.session_expiry_enabled;
 
       var hoursInput = el('input', {
-        class: 'sched-input', type: 'number', min: '1', max: '8760', step: '1',
-        value: String(hours)
+        class: 'set-num', type: 'number', min: '1', max: '8760', step: '1',
+        value: String(hours), 'aria-label': 'Hours before a login expires'
       });
       hoursInput.disabled = !on;
       hoursInput.addEventListener('input', function () {
@@ -5562,15 +6079,15 @@
       var toggle = el('button', {
         class: 'btn btn-sm toggle-btn' + (on ? ' on' : ''), type: 'button',
         'aria-pressed': on ? 'true' : 'false',
-        title: on ? 'Turn the timeout off - the login lasts until you log out'
-                  : 'Turn the timeout on - the login expires after a set number of hours',
+        title: on ? 'Turn the timeout off: the login lasts until you log out'
+                  : 'Turn the timeout on: the login expires after a set number of hours',
         text: on ? 'Expiry on' : 'Expiry off'
       });
       toggle.addEventListener('click', function () { on = !on; draw(); });
 
       var saveBtn = el('button', { class: 'btn btn-primary', type: 'button', text: 'Save' });
       saveBtn.addEventListener('click', function () {
-        /* 0 IS the off value, not a missing one - the server reads it as "never expires". */
+        /* 0 IS the off value, not a missing one: the server reads it as "never expires". */
         var send = 0;
         if (on) {
           send = parseInt(hoursInput.value, 10);
@@ -5590,34 +6107,34 @@
           });
       });
 
-      /* Unsaved state is visible rather than implied: the pill reports what is STORED, and the
-         row reports what the form currently says, so a toggled-but-unsaved card cannot be
-         mistaken for a saved one. */
-      var stored = !!cfg.session_expiry_enabled;
+      /* Unsaved is a quiet chip beside Save rather than a prose row: the state chip reports what is
+         STORED, this reports only that the form has moved off it, so a toggled-but-unsaved card is
+         never mistaken for a saved one. */
       var dirty = (on !== stored) || (on && hours !== cfg.session_hours);
-
-      var rows = [
-        statusRow('Expiry', on ? 'after ' + hours + ' hours' : 'never',
-                  on ? '' : 'the login lasts until you log out'),
-        statusRow('Hours', el('span', { class: 'sched-ctl' }, [hoursInput]),
-                  on ? '' : 'ignored while expiry is off'),
-        statusRow('Applies to', 'sessions created from the next login onward',
-                  'changing this does not end or extend a session already open')
-      ];
-      if (dirty) {
-        rows.push(statusRow('Unsaved', 'stored value is '
-                            + (stored ? cfg.session_hours + ' hours' : 'never')));
-      }
-      if (!on && cfg.session_note) rows.push(statusRow('Note', cfg.session_note));
+      var actions = el('div', { class: 'set-actions' }, [saveBtn]);
+      if (dirty) actions.appendChild(el('span', { class: 'set-dirty', text: 'Unsaved changes' }));
 
       append(card, [
-        el('div', { class: 'statuscard-head' }, [
-          el('h2', { class: 'card-title', text: 'Session' }),
-          stored ? healthPill('ok', cfg.session_hours + ' hours')
-                 : healthPill('warn', 'no timeout')
+        el('div', { class: 'card-title set-head' }, [
+          el('span', { text: 'Session expiry' }),
+          stored ? el('span', { class: 'pill pill-submitted', text: cfg.session_hours + ' hours' })
+                 : el('span', { class: 'pill pill-neutral', text: 'no timeout' })
         ]),
-        el('div', { class: 'srows' }, rows.filter(Boolean)),
-        el('div', { class: 'statuscard-actions' }, [toggle, saveBtn])
+        el('div', { class: 'pane-body' }, [
+          el('div', { class: 'set-rows' }, [
+            el('div', { class: 'set-row' }, [
+              el('div', { class: 'set-info' }, [
+                el('span', { class: 'set-name', text: 'Expire the login after a set time' }),
+                on ? null : el('span', { class: 'set-hint', text: 'The login lasts until you log out.' })
+              ]),
+              el('div', { class: 'set-ctl' }, [
+                toggle, hoursInput,
+                el('span', { class: 'set-unit' + (on ? '' : ' is-off'), text: 'hours' })
+              ])
+            ])
+          ]),
+          actions
+        ])
       ]);
     }
 
@@ -5628,9 +6145,7 @@
   function statusView(root) {
     root.appendChild(el('div', { class: 'page-head' }, [
       el('div', {}, [
-        el('h1', { class: 'page-title', text: 'Status' }),
-        el('p', { class: 'page-sub',
-                  text: 'Integration health, scheduled jobs, and what the index currently holds.' })
+        el('h1', { class: 'page-title', text: 'Status' })
       ])
     ]));
 
@@ -5670,8 +6185,13 @@
         }
 
 
+        /* Two eyebrow-led grids of tiles, dashboard-style: the console's own health first, the
+           HackerOne surface below it. Each card keeps its coloured health pill (the badging Seth
+           likes) and its exact rows; only the layout is new. */
+
         /* --- build ------------------------------------------------------- */
-        host.appendChild(statusCard('Build', healthPill('ok', 'v' + (d.version || '?')), [
+        var gConsole = el('div', { class: 'statusgrid' });
+        gConsole.appendChild(statusCard('Build', healthPill('ok', 'v' + (d.version || '?')), [
           statusRow('Version', 'v' + (d.version || '?')),
           statusRow('Server time', d.now || '-')
         ], []));
@@ -5680,7 +6200,7 @@
         var idxVerdict = (idx.shadow_rows || 0) > 0
           ? healthPill('bad', idx.shadow_rows + ' shadow rows')
           : healthPill('ok', 'clean');
-        host.appendChild(statusCard('Index', idxVerdict, [
+        gConsole.appendChild(statusCard('Index', idxVerdict, [
           statusRow('Reports', String(idx.reports || 0), 'from the HackerOne API'),
           statusRow('With body', String(idx.reports_with_body || 0) + ' / ' + (idx.reports || 0)),
           statusRow('With comments', String(idx.reports_with_thread || 0) + ' / ' + (idx.reports || 0)),
@@ -5691,10 +6211,11 @@
         ], []));
 
         /* --- credential ------------------------------------------------- */
+        var gH1 = el('div', { class: 'statusgrid' });
         var credVerdict = integ.configured
           ? healthPill('ok', 'configured')
           : healthPill('bad', 'not configured');
-        host.appendChild(statusCard('HackerOne credential', credVerdict, [
+        gH1.appendChild(statusCard('HackerOne credential', credVerdict, [
           statusRow('Username', integ.username || '-'),
           statusRow('Token', integ.masked_token || '-'),
           statusRow('Fingerprint', integ.fingerprint || '-'),
@@ -5728,7 +6249,7 @@
               });
           });
 
-          host.appendChild(statusCard('Incremental poll', verdict, [
+          var pollCard = statusCard('Incremental poll', verdict, [
             schedRow('h1', 'every 15 minutes'),
             statusRow('Last run', ago(poll.last_run), poll.last_run || ''),
             statusRow('Last success', ago(poll.last_success), poll.last_success || ''),
@@ -5745,26 +6266,16 @@
           ], [
             pollBtn,
             el('a', { class: 'btn', href: '#/audit', text: 'View changes' })
-          ]));
-
-          /* An empty cron log reads as a broken job and is not one. Say so where it is seen. */
-          if (!poll.last_error && (poll.failures || 0) === 0) {
-            host.appendChild(el('p', { class: 'status-note' },
-              'The cron job runs with --quiet and prints nothing on success, so an empty ' +
-              'h1-cron.log is the healthy case. Activity is recorded here and in the Audit log, ' +
-              'not in that file.'));
-          }
-        } else {
-          host.appendChild(statusCard('Incremental poll',
-            healthPill('bad', 'unavailable'),
-            [statusRow('Module', 'h1_watch could not be imported')], []));
+          ], 'The cron job runs with --quiet and prints nothing on success, so an empty h1-cron.log '
+            + 'is the healthy case. Activity is recorded here and in the Audit log, not in that file.');
+          gH1.appendChild(pollCard);
         }
 
         /* --- advisory feed ----------------------------------------------- */
         var fetchAge = agoSeconds(adv.last_fetched);
         var advVerdict = fetchAge > 86400 ? healthPill('warn', 'stale')
           : healthPill('ok', 'healthy');
-        host.appendChild(statusCard('Advisory feed', advVerdict, [
+        gH1.appendChild(statusCard('Advisory feed', advVerdict, [
           schedRow('advisories', 'every 15 minutes'),
           statusRow('Last fetch', ago(adv.last_fetched), adv.last_fetched || ''),
           statusRow('Advisories', String(adv.count || 0)),
@@ -5776,7 +6287,7 @@
         ]));
 
         /* --- money ------------------------------------------------------- */
-        host.appendChild(statusCard('Earnings', healthPill('ok', 'from HackerOne'), [
+        gH1.appendChild(statusCard('Earnings', healthPill('ok', 'from HackerOne'), [
           statusRow('Awards', String(money.awards || 0)),
           statusRow('Total', fmtMoney(String(money.total || 0), money.currency)),
           statusRow('My share', fmtMoney(String(money.my_share || 0), money.currency)),
@@ -5784,12 +6295,18 @@
           statusRow('As collaborator', String(money.as_collaborator || 0))
         ], []));
 
+        host.appendChild(el('div', { class: 'tab-eyebrow', text: 'Console' }));
+        host.appendChild(gConsole);
+        host.appendChild(el('div', { class: 'tab-eyebrow', text: 'HackerOne' }));
+        host.appendChild(gH1);
+
         /* Reindex still needs a home; it is maintenance, and this is the maintenance page.
            The Upload card that used to sit here is gone: dropping files into a workspace is
            done from a shell, and a form for it on the health page was never used. Its
            uploadCard() builder went with it: nothing else mounted it. POST /api/uploads is
            untouched and still works for anything that posts to it. */
-        host.appendChild(el('div', { class: 'cards3' }, reindexCard()));
+        host.appendChild(el('div', { class: 'tab-eyebrow', text: 'Maintenance' }));
+        host.appendChild(el('div', { class: 'statusgrid' }, reindexCard()));
       }).catch(function (err) {
         clear(host);
         append(host, errorPanel(err, load));
@@ -5831,11 +6348,7 @@
     }
 
     root.appendChild(el('div', { class: 'page-head' }, el('div', {}, [
-      el('h1', { class: 'page-title', text: 'Targets' }),
-      el('p', {
-        class: 'page-sub',
-        text: 'In-scope assets from HackerOne, and the local workspaces leads are filed against.'
-      })
+      el('h1', { class: 'page-title', text: 'Targets' })
     ])));
 
     var filters = el('div', { class: 'filters card' });
@@ -5849,7 +6362,10 @@
     var wsHost = el('div', {});
     wsCard.appendChild(wsHost);
 
-    root.appendChild(el('div', {}, [filters, scopeCard, wsCard]));
+    root.appendChild(el('div', {}, [
+      filtersToolbar(filters, { startOpen: !!(params.program || params.type || params.bounty === '1') }),
+      filters, scopeCard, wsCard
+    ]));
 
     append(scopeHost, loading('Loading scopes…'));
     append(wsHost, loading('Loading workspace targets…'));
@@ -5867,14 +6383,17 @@
         [{ value: '', label: 'All types' }].concat(types.map(function (t) {
           return { value: t, label: assetTypeLabel(t) };
         })), params.type, function (v) { go({ type: v }); })));
-      filters.appendChild(el('div', { class: 'field' }, el('button', {
-        class: 'btn chip-program' + (params.bounty === '1' ? ' on' : ''),
-        type: 'button',
-        'aria-pressed': params.bounty === '1' ? 'true' : 'false',
-        title: 'Hide assets the program says earn no bounty',
-        text: 'Bounty-eligible only',
-        onclick: function () { go({ bounty: params.bounty === '1' ? '' : '1' }); }
-      })));
+      filters.appendChild(el('label', { class: 'field' }, [
+        el('span', { class: 'field-label', text: ' ' }),
+        el('button', {
+          class: 'btn btn-sm chip-program' + (params.bounty === '1' ? ' on' : ''),
+          type: 'button',
+          'aria-pressed': params.bounty === '1' ? 'true' : 'false',
+          title: 'Hide assets the program says earn no bounty',
+          text: 'Bounty-eligible only',
+          onclick: function () { go({ bounty: params.bounty === '1' ? '' : '1' }); }
+        })
+      ]));
 
       var shown = items.filter(function (r) {
         if (params.program && (r.program || '') !== params.program) return false;
@@ -5967,6 +6486,496 @@
       out.push(v);
     });
     return out.sort();
+  }
+
+  /* ============================================================== regression
+     The queue over shipped fixes: which of our resolved reports is due a retest, and what the
+     retest found. The list is DERIVED server-side from the Tracker's resolved rows, so there is
+     nothing to sync here and no Refresh that talks to HackerOne - re-rendering the tab is the
+     refresh, exactly like Targets.
+
+     Two things drive the ordering and both are shown rather than implied: `moved_since_test`,
+     meaning the program touched the report after we tested it, and `days_overdue`. A row that
+     moved is the one to open first, so it carries a badge instead of relying on position. */
+
+  /* Verdict -> the pill class it borrows. The same st-* scale the Tracker's states use, so a
+     colour means the same thing on both tabs: green is a finished good outcome, red is something
+     that needs acting on, grey is an outcome we chose not to pursue. `broken` is the one verdict
+     in the vocabulary that is a FINDING rather than a closure, which is why it takes the danger
+     colour that nothing else on this tab uses. */
+  var REGRESSION_VERDICT_CLASS = {
+    'pending': 'st-new',
+    'holds': 'st-resolved',
+    'broken': 'st-duplicate',
+    'skipped': 'st-muted'
+  };
+
+  var REGRESSION_BUCKETS = [
+    { key: 'due', label: 'Due' },
+    { key: 'scheduled', label: 'Scheduled' },
+    { key: 'broken', label: 'Fix broken' },
+    { key: 'holds', label: 'Fix holds' },
+    { key: 'skipped', label: 'Skipped' },
+    { key: 'all', label: 'All' }
+  ];
+
+  var REGRESSION_VERDICT_HINT = {
+    'holds': 'Retested, the fix stands.',
+    'broken': 'The fix is incomplete or bypassable. Draft the lead.',
+    'skipped': 'Deliberately not retesting this one.',
+    'pending': 'Clear the verdict and put it back in the queue.'
+  };
+
+  function regressionVerdictPill(v) {
+    var s = String(v || 'pending').toLowerCase();
+    return el('span', {
+      class: 'pill ' + (REGRESSION_VERDICT_CLASS[s] || 'st-unknown'),
+      text: s, title: REGRESSION_VERDICT_HINT[s] || ''
+    });
+  }
+
+  /* "34 days overdue" / "in 6 days". Reads as a sentence in the cell rather than as a signed
+     number the reader has to work out the sign of. */
+  function regressionDueCell(r) {
+    var over = Number(r.days_overdue || 0);
+    if (over > 0) {
+      return el('span', {
+        class: 'reg-over', text: over + 'd overdue',
+        title: 'Due ' + (r.due_on || 'unknown')
+      });
+    }
+    return el('span', {
+      class: 'tiny dim', text: r.due_on || '-',
+      title: r.snoozed ? 'Snoozed. Window would have made it ' + (r.due_derived || '-')
+                       : 'Fix closed ' + (r.resolved_on || 'unknown')
+    });
+  }
+
+  /* Client-side sort for the regression queue (the endpoint returns the whole filtered set). Dates
+     compare as ISO strings; bounty and the report id compare numerically. */
+  function sortRegItems(items, sort) {
+    if (!sort) return items;
+    var desc = sort.charAt(0) === '-';
+    var key = desc ? sort.slice(1) : sort;
+    var num = (key === 'bounty' || key === 'h1_id');
+    return items.slice().sort(function (a, b) {
+      var av = a[key], bv = b[key];
+      if (num) { av = parseFloat(av) || 0; bv = parseFloat(bv) || 0; return desc ? bv - av : av - bv; }
+      av = String(av || ''); bv = String(bv || '');
+      return desc ? bv.localeCompare(av) : av.localeCompare(bv);
+    });
+  }
+
+  function regressionView(root, ctx) {
+    var q = (ctx && ctx.q) || new URLSearchParams('');
+    var params = {
+      bucket: q.get('bucket') || 'due',
+      program: q.get('program') || '',
+      q: q.get('q') || '',
+      sort: q.get('sort') || ''
+    };
+    var openId = (ctx && ctx.id) || null;
+
+    function go(patch) {
+      var next = {};
+      for (var k in params) next[k] = params[k];
+      for (var p in patch) next[p] = patch[p];
+      var qs = qsFrom(next);
+      location.hash = '#/regression' + (openId ? '/' + openId : '') + (qs ? '?' + qs : '');
+    }
+
+    root.appendChild(el('div', { class: 'page-head' }, [
+      el('div', {}, [
+        el('h1', { class: 'page-title', text: 'Regression' })
+      ])
+    ]));
+
+    /* Match Leads/Tracker: the filter strip folds behind a Search toggle in a compact toolbar that
+       also carries a Sort control, so the queue leads and the controls tuck away. */
+    var filters = el('div', { class: 'filters card filters-collapsible' });
+    if (params.q || params.program) filters.classList.add('q-open');
+    var searchToggle = el('button', {
+      class: 'btn btn-sm filters-toggle' + (filters.classList.contains('q-open') ? ' on' : ''),
+      type: 'button', text: 'Search',
+      'aria-expanded': filters.classList.contains('q-open') ? 'true' : 'false',
+      title: 'Show or hide the search controls'
+    });
+    searchToggle.addEventListener('click', function () {
+      var open = !filters.classList.contains('q-open');
+      filters.classList.toggle('q-open', open);
+      searchToggle.classList.toggle('on', open);
+      searchToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+    var curDesc = params.sort.charAt(0) === '-';
+    var curBase = curDesc ? params.sort.slice(1) : params.sort;
+    var sortSel = selectEl([{ value: '', label: 'Default order' }].concat([
+      { value: 'due_on', label: 'Sort: Due date' },
+      { value: 'resolved_on', label: 'Sort: Fixed date' },
+      { value: 'bounty', label: 'Sort: Paid' },
+      { value: 'h1_id', label: 'Sort: Report id' }
+    ]), curBase, function (v) { go({ sort: v ? (curDesc ? '-' + v : v) : '' }); });
+    sortSel.setAttribute('aria-label', 'Sort by');
+    var dirBtn = el('button', {
+      class: 'btn btn-sm sortdir', type: 'button', disabled: curBase ? null : true,
+      title: curDesc ? 'Descending - click for ascending' : 'Ascending - click for descending',
+      text: curDesc ? '↓' : '↑',
+      onclick: function () { if (curBase) go({ sort: curDesc ? curBase : '-' + curBase }); }
+    });
+    root.appendChild(el('div', { class: 'listtoolbar' }, [
+      el('div', { class: 'lt-left' }, searchToggle),
+      el('div', { class: 'lt-right' }, el('div', { class: 'sortctl' }, [sortSel, dirBtn]))
+    ]));
+    root.appendChild(filters);
+
+    var host = el('div', {});
+    root.appendChild(host);
+
+    var paneHost = el('div', {});
+    root.appendChild(paneHost);
+
+    function load() {
+      clear(host);
+      append(host, loading('Reading the queue...'));
+      api('/regression?' + qsFrom({
+        bucket: params.bucket, program: params.program, q: params.q, limit: 500
+      })).then(draw).catch(function (err) {
+        clear(host);
+        clear(filters);
+        append(host, el('div', { class: 'pane-body' }, errorPanel(err, load)));
+      });
+    }
+
+    function drawFilters(data) {
+      clear(filters);
+
+      /* Counts on the chips, because "Due 12" is the whole reason to look at this tab and a bare
+         label makes you click each one to find out. They count the WHOLE queue, not the filtered
+         page, so the numbers do not move as you filter. */
+      var chips = el('div', { class: 'field grow' }, [
+        el('span', { class: 'field-label', text: 'Show' }),
+        el('div', { class: 'reg-chips' }, REGRESSION_BUCKETS.map(function (b) {
+          var n = (data.counts || {})[b.key];
+          var sel = params.bucket === b.key;
+          /* Same statechip legend the Tracker and Leads use, coloured per bucket, so the tabs read
+             as one system: selected wins with the accent, an empty bucket dims. */
+          return el('button', {
+            class: 'statechip regchip rc-' + b.key + (sel ? ' on' : '') + (n === 0 && !sel ? ' is-zero' : ''),
+            type: 'button',
+            'aria-pressed': sel ? 'true' : 'false',
+            onclick: function () { go({ bucket: b.key }); }
+          }, [
+            el('span', { text: b.label }),
+            el('span', { class: 'sc-n', text: n === undefined ? '' : String(n) })
+          ]);
+        }))
+      ]);
+      filters.appendChild(chips);
+
+      filters.appendChild(field('Program', selectEl(
+        [{ value: '', label: 'All programs' }].concat((data.programs || []).map(function (p) {
+          return { value: p, label: p };
+        })), params.program, function (v) { go({ program: v }); })));
+
+      var input = el('input', {
+        type: 'search', value: params.q, placeholder: 'title, id, asset, note...',
+        spellcheck: 'false'
+      });
+      input.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') go({ q: input.value });
+      });
+      filters.appendChild(el('label', { class: 'field grow' }, [
+        el('span', { class: 'field-label', text: 'Search' }), input
+      ]));
+
+      filters.appendChild(el('div', { class: 'field' }, [
+        el('span', { class: 'field-label', text: ' ' }),
+        el('span', {
+          class: 'tiny dim',
+          text: 'Window ' + data.window_days + ' days',
+          title: 'A fix reads as due this many days after the report closed. Change it in Settings.'
+        })
+      ]));
+    }
+
+    function draw(data) {
+      drawFilters(data);
+      clear(host);
+      var items = sortRegItems(data.items || [], params.sort);
+
+      if (!(data.counts || {}).all) {
+        host.appendChild(empty('No resolved reports yet',
+          'This queue is built from reports HackerOne has marked resolved. Run ' +
+          '`python3 h1.py --sync` to pull them.'));
+        return;
+      }
+      if (!items.length) {
+        host.appendChild(empty('Nothing in this bucket',
+          params.bucket === 'due'
+            ? 'Every shipped fix has been looked at, or is still inside the ' +
+              data.window_days + '-day window.'
+            : 'Try another filter.'));
+        return;
+      }
+
+      host.appendChild(dataTable([
+        {
+          key: 'h1_id', label: 'Report', cls: 'cell-mono nowrap tiny',
+          render: function (r) { return '#' + r.h1_id; }
+        },
+        { key: 'program', label: 'Program', cls: 'cell-mono nowrap tiny' },
+        {
+          key: 'title', label: 'Title', cls: 'cell-title',
+          render: function (r) {
+            return el('span', {}, [
+              el('span', { text: r.title || '' }),
+              /* The badge, not the sort position, is what says "this one moved". A reader
+                 scanning the list cannot see an ordering rule, only a mark. */
+              r.moved_since_test
+                ? el('span', {
+                    class: 'rowtag rowtag-updated', text: 'moved',
+                    title: 'The program touched this report after your retest, so the verdict ' +
+                           'below no longer describes it.'
+                  })
+                : null
+            ]);
+          }
+        },
+        { key: 'asset', label: 'Asset', cls: 'cell-mono tiny dim' },
+        {
+          key: 'resolved_on', label: 'Fixed', cls: 'nowrap tiny',
+          render: function (r) {
+            return el('span', {
+              text: r.resolved_on || '-',
+              title: (r.days_since_fix === null || r.days_since_fix === undefined)
+                ? '' : r.days_since_fix + ' days ago'
+            });
+          }
+        },
+        { key: 'due_on', label: 'Due', cls: 'nowrap', render: regressionDueCell },
+        {
+          key: 'verdict', label: 'Verdict', cls: 'nowrap',
+          render: function (r) { return regressionVerdictPill(r.verdict); }
+        },
+        {
+          key: 'bounty', label: 'Paid', cls: 'nowrap tiny',
+          render: function (r) {
+            /* What the original earned. Not decoration: it is the best available proxy for how
+               much the program cared, and therefore for how carefully the fix was written. */
+            return r.bounty ? fmtMoney(r.bounty, r.currency) : el('span', { class: 'muted', text: '-' });
+          }
+        }
+      ], items, {
+        cards: true,
+        idKey: 'h1_id',
+        selectedId: openId,
+        rowClass: function (r) { return r.moved_since_test ? 'reg-moved' : ''; },
+        onRow: function (r) {
+          location.hash = '#/regression/' + encodeURIComponent(r.h1_id) + hashQuery();
+        }
+      }));
+
+      host.appendChild(el('div', { class: 'tiny dim pane-body', text:
+        items.length + ' of ' + data.counts.all + ' resolved reports  |  ' +
+        data.counts.untested + ' never retested  |  ' + data.counts.broken + ' fixes broken' }));
+
+      if (openId) drawPane();
+    }
+
+    /* ------------------------------------------------------------- detail --- */
+    function drawPane() {
+      clear(paneHost);
+      var wrap = el('section', { class: 'card pane' });
+      paneHost.appendChild(wrap);
+      append(wrap, loading('Loading the report...'));
+
+      api('/regression/' + encodeURIComponent(openId)).then(function (r) {
+        clear(wrap);
+        wrap.appendChild(el('div', { class: 'pane-head' }, [
+          el('h2', { text: '#' + r.h1_id + '  ' + (r.title || '') }),
+          el('div', { class: 'pane-actions' }, [
+            copyButton(function () { return String(r.h1_id); }, 'Copy report ID'),
+            /* Built here rather than through extLink, which returns a bare anchor: this one sits
+               in a row of buttons and has to carry the button classes to match them. safeURL is
+               still what decides the href is safe to follow. */
+            safeURL(r.url) ? el('a', {
+              class: 'btn btn-sm', href: safeURL(r.url),
+              target: '_blank', rel: 'noopener noreferrer', text: 'Open on HackerOne'
+            }) : null,
+            el('a', {
+              class: 'btn btn-sm', text: 'Open in Tracker',
+              href: '#/reports?' + qsFrom({ q: r.h1_id, program: ALL_PROGRAMS })
+            }),
+            el('a', {
+              class: 'btn btn-sm btn-quiet', text: 'Close',
+              href: '#/regression' + hashQuery()
+            })
+          ].filter(Boolean))
+        ]));
+
+        var body = el('div', { class: 'pane-body' });
+        wrap.appendChild(body);
+
+        body.appendChild(metaGrid([
+          ['Program', r.program || '-'],
+          ['Asset', r.asset || '-', 'mono'],
+          ['Weakness', r.weakness || r.cwe || '-'],
+          ['Severity', r.severity || '-'],
+          ['Fixed on', r.resolved_on || '-'],
+          ['Due', (r.due_on || '-') + (r.snoozed ? '  (snoozed)' : '')],
+          ['Retests', String(r.attempts || 0) +
+                      (r.last_tested ? ', last ' + r.last_tested : ', never')],
+          ['Bounty', r.bounty ? String(r.bounty) : '-']
+        ]));
+
+        if (r.moved_since_test) {
+          body.appendChild(el('div', { class: 'alert alert-warn' }, [
+            el('strong', { class: 'alert-title', text: 'Moved since your retest. ' }),
+            'HackerOne recorded activity on this report after ' + r.last_tested +
+            ', so the verdict below describes the report as it stood before that. Re-read the ' +
+            'thread before trusting it.'
+          ]));
+        }
+
+        body.appendChild(regressionActions(r));
+
+        if (r.note) {
+          body.appendChild(el('div', { class: 'pane-label', text: 'Retest note' }));
+          body.appendChild(el('div', { class: 'md' }, el('p', { text: r.note })));
+        }
+
+        if (r.lead_path) {
+          body.appendChild(el('div', { class: 'form-actions' }, [
+            el('span', { class: 'tiny dim', text: 'Lead drafted: ' }),
+            el('a', {
+              class: 'btn btn-sm', text: 'Open in Files',
+              href: '#/files?' + qsFrom({
+                path: r.lead_path.replace(/\/[^/]*$/, ''), file: r.lead_path
+              })
+            })
+          ]));
+        }
+
+        /* The original report, then the thread. In that order because the thread only makes sense
+           once you have re-read what was claimed - and the thread is where the program said what
+           it changed, which is the paragraph the retest is planned from. */
+        if (r.body) {
+          body.appendChild(el('div', { class: 'pane-label', text: 'The original report' }));
+          body.appendChild(mdBlock(String(r.body)));
+        }
+        var thread = threadPanel({ thread: JSON.stringify(r.thread || []) });
+        if (thread) body.appendChild(thread);
+      }).catch(function (err) {
+        clear(wrap);
+        append(wrap, el('div', { class: 'pane-body' }, errorPanel(err, drawPane)));
+      });
+    }
+
+    /* --------------------------------------------------------- the actions --- */
+    function regressionActions(r) {
+      var panel = el('div', { class: 'workpanel' });
+      var busy = false;
+
+      function post(path, payload, okMsg) {
+        if (busy) return;
+        busy = true;
+        api('/regression/' + encodeURIComponent(r.h1_id) + path, {
+          method: 'POST', body: payload
+        }).then(function () {
+          toast(okMsg, 'ok');
+          busy = false;
+          /* load() alone: it re-fetches the queue, and draw() re-opens the pane when a row is
+             selected. Calling drawPane() here as well would fetch the detail twice per click. */
+          load();
+        }).catch(function (err) { busy = false; toastError(err); });
+      }
+
+      var note = el('textarea', {
+        rows: 2, spellcheck: 'true',
+        placeholder: 'What the retest actually did - the request you replayed and what came back.',
+        value: r.note || ''
+      });
+
+      panel.appendChild(el('div', { class: 'pane-label', text: 'Record a retest' }));
+      panel.appendChild(el('label', { class: 'field grow' }, [
+        el('span', { class: 'field-label', text: 'Note' }), note
+      ]));
+
+      var verdicts = el('div', { class: 'form-actions' }, ['holds', 'broken', 'skipped'].map(
+        function (v) {
+          return el('button', {
+            class: 'btn btn-sm' + (v === 'broken' ? ' btn-danger' : '') +
+                   (r.verdict === v ? ' active' : ''),
+            type: 'button', title: REGRESSION_VERDICT_HINT[v],
+            text: v === 'holds' ? 'Fix holds' : (v === 'broken' ? 'Fix broken' : 'Skip'),
+            onclick: function () {
+              post('/verdict', { verdict: v, note: note.value },
+                   'Recorded: ' + v);
+            }
+          });
+        }));
+      if (r.verdict !== 'pending') {
+        verdicts.appendChild(el('button', {
+          class: 'btn btn-sm btn-quiet', type: 'button', text: 'Clear verdict',
+          title: REGRESSION_VERDICT_HINT.pending,
+          onclick: function () {
+            post('/verdict', { verdict: 'pending', note: note.value }, 'Verdict cleared');
+          }
+        }));
+      }
+      panel.appendChild(verdicts);
+
+      /* Drafting the lead is offered ONLY on a broken fix, matching the server, and the button
+         says why it is disabled rather than being absent - "how do I turn this into a lead" is
+         the question this tab exists to answer. */
+      var canDraft = r.verdict === 'broken' && !r.lead_path;
+      var targetSel = selectEl([{ value: '', label: 'Pick a workspace...' }], '', null);
+      api('/targets?limit=500').then(function (d) {
+        clear(targetSel);
+        targetSel.appendChild(el('option', { value: '', text: 'Pick a workspace...' }));
+        ((d && d.items) || []).forEach(function (t) {
+          targetSel.appendChild(el('option', { value: t.slug, text: t.slug }));
+        });
+      }).catch(function () { /* the draft button reports its own failure */ });
+
+      panel.appendChild(el('div', { class: 'pane-label', text: 'Draft the bypass lead' }));
+      panel.appendChild(el('div', { class: 'form-actions' }, [
+        field('Workspace', targetSel),
+        el('button', {
+          class: 'btn btn-sm btn-primary', type: 'button', text: 'Draft lead',
+          disabled: !canDraft,
+          title: r.lead_path ? 'A lead has already been drafted for this fix.'
+               : (canDraft ? 'Write a pre-filled lead into the workspace and index it.'
+                           : 'Record a "Fix broken" verdict first - a lead states that a fix failed.'),
+          onclick: function () {
+            if (!targetSel.value) { toast('Pick a workspace first.', 'err'); return; }
+            post('/lead', { target: targetSel.value }, 'Lead drafted into ' + targetSel.value);
+          }
+        })
+      ]));
+
+      /* Snooze is deliberately below the verdicts and quieter: it is the action you take when you
+         are NOT going to look, and making it as prominent as recording a result would be an
+         invitation to keep pushing the queue away. */
+      panel.appendChild(el('div', { class: 'form-actions' }, [
+        el('span', { class: 'tiny dim', text: 'Not yet: ' }),
+        el('button', {
+          class: 'btn btn-sm btn-quiet', type: 'button', text: '+7 days',
+          onclick: function () { post('/snooze', { days: 7 }, 'Snoozed 7 days'); }
+        }),
+        el('button', {
+          class: 'btn btn-sm btn-quiet', type: 'button', text: '+30 days',
+          onclick: function () { post('/snooze', { days: 30 }, 'Snoozed 30 days'); }
+        }),
+        r.snoozed ? el('button', {
+          class: 'btn btn-sm btn-quiet', type: 'button', text: 'Clear snooze',
+          onclick: function () { post('/snooze', { clear: true }, 'Snooze cleared'); }
+        }) : null
+      ].filter(Boolean)));
+
+      return panel;
+    }
+
+    load();
   }
 
   /* ================================================================= router */
@@ -6087,11 +7096,7 @@
   function certificatesView(root) {
     root.appendChild(el('div', { class: 'page-head' }, [
       el('div', {}, [
-        el('h1', { class: 'page-title', text: 'Certificates' }),
-        el('p', {
-          class: 'page-sub',
-          text: 'Trust this server in your browser so the TLS warning goes away.'
-        })
+        el('h1', { class: 'page-title', text: 'Certificates' })
       ])
     ]));
 
@@ -6659,17 +7664,18 @@
   function auditView(root) {
     root.appendChild(el('div', { class: 'page-head' }, [
       el('div', {}, [
-        el('h1', { class: 'page-title', text: 'Audit log' }),
-        el('p', { class: 'page-sub',
-                  text: 'What this system did, what its jobs are doing, and what changed upstream.' })
+        el('h1', { class: 'page-title', text: 'Audit log' })
       ])
     ]));
 
-    var host = el('div', {});
+    /* Scopes the display-type treatment (lined-up figures) onto the trail's timestamps. */
+    var host = el('div', { class: 'auditview' });
     root.appendChild(host);
 
+    host.appendChild(el('div', { class: 'tab-eyebrow', text: 'Activity' }));
     host.appendChild(auditTrailCard());
 
+    host.appendChild(el('div', { class: 'tab-eyebrow', text: 'Feeds and upcoming panels' }));
     host.appendChild(el('div', { class: 'cards2' }, [
       advisoryFeedCard(),
       skeletonCard(
@@ -6776,8 +7782,9 @@
         ? el('span', { class: 'pill st-resolved', text: 'configured' })
         : el('span', { class: 'pill st-new', text: 'not configured' }));
 
+      /* The badge above already says configured or not, so that row is dropped here: the grid
+         carries only the facts the badge cannot. */
       statusHost.appendChild(metaGrid([
-        integrationRow('Configured', d.configured ? 'yes' : 'no'),
         integrationRow('Username', d.username || '—'),
         integrationRow('Token', d.masked_token || '—', 'mono'),
         integrationRow('Fingerprint', d.fingerprint || '—', 'mono'),
@@ -6815,8 +7822,8 @@
     function drawActions(configured) {
       clear(actionsHost);
 
-      var testBtn = el('button', { class: 'btn', type: 'button', text: 'Test connection' });
-      var syncBtn = el('button', { class: 'btn btn-primary', type: 'button', text: 'Sync now' });
+      var testBtn = el('button', { class: 'btn btn-sm', type: 'button', text: 'Test connection' });
+      var syncBtn = el('button', { class: 'btn btn-sm btn-primary', type: 'button', text: 'Sync now' });
       if (!configured) { testBtn.disabled = true; syncBtn.disabled = true; }
 
       testBtn.addEventListener('click', function () {
@@ -6844,6 +7851,90 @@
           });
       });
 
+      // Render the progress bar into outHost and poll to completion. Defined here so BOTH a fresh
+      // click AND a re-mount (navigating back to Integrations mid-sync) drive the same bar. The
+      // document.contains guard lets a stale loop from a previous mount stop once its bar is
+      // detached, so a freshly re-attached bar takes over cleanly.
+      function attachSyncProgress() {
+        busy = true;
+        syncBtn.disabled = true;
+        testBtn.disabled = true;
+        syncBtn.textContent = 'Syncing…';
+        clear(outHost);
+
+        var barFill = el('div', { class: 'int-bar-fill' });
+        var barLabel = el('div', { class: 'int-bar-label', text: 'Syncing…' });
+        append(outHost, el('div', { class: 'int-progress' }, [
+          barLabel,
+          el('div', { class: 'int-bar' }, [barFill]),
+          el('div', { class: 'int-bar-note',
+                      text: 'The list carries no bounty or CVSS, so each report is fetched ' +
+                            'individually. A full run takes about a minute; you can leave this page ' +
+                            'and come back, the progress follows.' })
+        ]));
+
+        function reset() {
+          busy = false;
+          syncBtn.disabled = false;
+          testBtn.disabled = false;
+          syncBtn.textContent = 'Sync now';
+        }
+
+        function showResult(res) {
+          res = res || {};
+          var errs = Array.isArray(res.detail_errors) ? res.detail_errors.length : (res.detail_errors || 0);
+          toast('H1 sync: ' + (res.fetched || 0) + ' fetched, ' + (res['new'] || 0) + ' new, ' +
+                (res.updated || 0) + ' updated' + (errs ? ', ' + errs + ' errors' : '') + '.',
+                errs ? 'err' : 'ok');
+          clear(outHost);
+          append(outHost, el('div', { class: 'alert ' + (errs ? 'alert-warn' : 'alert-ok') },
+            'Sync finished in ' + Math.round((res.elapsed_ms || 0) / 100) / 10 + 's' +
+            (res.program ? ' for program "' + res.program + '"' : '') + '.'));
+          append(outHost, metaGrid([
+            integrationRow('Fetched', String(res.fetched || 0)),
+            integrationRow('New', String(res['new'] || 0)),
+            integrationRow('Updated', String(res.updated || 0)),
+            integrationRow('Unchanged', String(res.unchanged || 0)),
+            integrationRow('Enriched', String(res.enriched || 0)),
+            integrationRow('Body files written', String(res.written || 0)),
+            integrationRow('Detail errors', String(errs)),
+            integrationRow('Elapsed', ((res.elapsed_ms || 0) + ' ms'))
+          ]));
+          loadStatus();
+        }
+
+        function poll() {
+          if (!document.body.contains(barFill)) { return; }   // this bar was replaced; let it die
+          api('/integrations/hackerone/sync/status', { method: 'GET' })
+            .then(function (st) {
+              if (!document.body.contains(barFill)) { return; }
+              st = st || {};
+              var total = st.total || 0, d = st.done || 0;
+              if (st.phase === 'listing' || total === 0) {
+                barFill.style.width = '8%';
+                barLabel.textContent = 'Listing reports…';
+              } else {
+                var pct = Math.max(2, Math.min(100, Math.round((d / total) * 100)));
+                barFill.style.width = pct + '%';
+                barLabel.textContent = 'Fetching report ' + d + ' of ' + total + ' (' + pct + '%)';
+              }
+              if (st.running) { setTimeout(poll, 900); return; }
+              reset();
+              if (st.error) {
+                clear(outHost);
+                append(outHost, errorPanel(st.error));
+                toastError(st.error);
+              } else {
+                barFill.style.width = '100%';
+                showResult(st.result);
+              }
+            })
+            .catch(function () { setTimeout(poll, 1500); });   // transient blip: keep polling
+        }
+
+        poll();
+      }
+
       syncBtn.addEventListener('click', function () {
         if (busy) return;
         busy = true;
@@ -6851,39 +7942,9 @@
         testBtn.disabled = true;
         syncBtn.textContent = 'Syncing…';
         clear(outHost);
-        append(outHost, el('div', { class: 'int-progress' }, [
-          loading('Two-phase sync running. The list endpoint carries no bounty or CVSS, so every ' +
-                  'report is fetched again individually — a full run takes about a minute. ' +
-                  'Leave this tab open.')
-        ]));
-
+        append(outHost, el('div', { class: 'int-progress' }, [loading('Starting the sync…')]));
         api('/integrations/hackerone/sync', { method: 'POST', body: {} })
-          .then(function (res) {
-            busy = false;
-            syncBtn.disabled = false;
-            testBtn.disabled = false;
-            syncBtn.textContent = 'Sync now';
-            res = res || {};
-            var errs = Array.isArray(res.detail_errors) ? res.detail_errors.length : (res.detail_errors || 0);
-            toast('H1 sync: ' + (res.fetched || 0) + ' fetched, ' + (res['new'] || 0) + ' new, ' +
-                  (res.updated || 0) + ' updated' + (errs ? ', ' + errs + ' errors' : '') + '.',
-                  errs ? 'err' : 'ok');
-            clear(outHost);
-            append(outHost, el('div', { class: 'alert ' + (errs ? 'alert-warn' : 'alert-ok') },
-              'Sync finished in ' + Math.round((res.elapsed_ms || 0) / 100) / 10 + 's' +
-              (res.program ? ' for program "' + res.program + '"' : '') + '.'));
-            append(outHost, metaGrid([
-              integrationRow('Fetched', String(res.fetched || 0)),
-              integrationRow('New', String(res['new'] || 0)),
-              integrationRow('Updated', String(res.updated || 0)),
-              integrationRow('Unchanged', String(res.unchanged || 0)),
-              integrationRow('Enriched', String(res.enriched || 0)),
-              integrationRow('Body files written', String(res.written || 0)),
-              integrationRow('Detail errors', String(errs)),
-              integrationRow('Elapsed', ((res.elapsed_ms || 0) + ' ms'))
-            ]));
-            loadStatus();
-          })
+          .then(function () { attachSyncProgress(); })
           .catch(function (err) {
             busy = false;
             syncBtn.disabled = false;
@@ -6902,6 +7963,14 @@
           ? 'A full sync is roughly 220 requests and takes about a minute.'
           : 'Store a credential first.' })
       ]);
+
+      // If a sync is already running when this card (re)mounts, re-attach the bar so the status
+      // survives navigating away and back for the whole duration of the sync.
+      if (configured) {
+        api('/integrations/hackerone/sync/status', { method: 'GET' })
+          .then(function (st) { if (st && st.running) { attachSyncProgress(); } })
+          .catch(function () {});
+      }
     }
 
     /* ------------------------------------------------------------ form --- */
@@ -6955,24 +8024,22 @@
       });
 
       append(formHost, [
-        el('h3', { class: 'int-formtitle', text: d.configured ? 'Replace the credential' : 'Store a credential' }),
-        el('div', { class: 'alert alert-info tiny' }, [
-          el('strong', { class: 'alert-title', text: 'How the token is handled.' }),
-          el('div', { text:
-            'It is verified against the live HackerOne API before anything is saved, so a typo ' +
-            'cannot silently replace a working credential. It is then written to secrets.json at ' +
-            'mode 0600 — never to config.json and never to the database. No endpoint can read it ' +
-            'back: this page only ever receives a mask and a sha256 fingerprint. To rotate it, ' +
-            'paste the new one here; to revoke it, delete it at hackerone.com/settings/api_token.' })
+        el('h3', { class: 'int-formtitle int-formtitle-info' }, [
+          el('span', { text: d.configured ? 'Replace the credential' : 'Store a credential' }),
+          /* The old blue box moved into this badge: shorter, and reveals on hover. */
+          infoBadge('Verified against the live HackerOne API before it is saved, then written to '
+            + 'secrets.json at mode 0600, never to config.json or the database. No endpoint can '
+            + 'read it back: this page only ever gets a mask and a sha256 fingerprint. To rotate, '
+            + 'paste a new one; to revoke, delete it at hackerone.com/settings/api_token.')
         ]),
         errHost,
         el('div', { class: 'form-grid' }, [
-          field('Username', userInput, 'your H1 handle — it is the HTTP Basic username'),
+          field('HackerOne username', userInput),
           /* No 'primary program' field. The Tracker defaults to every program, and `h1.py
              --submit` now REQUIRES --program and cross-checks it against the scope's owner and
              the report's workspace, so nothing reads a stored handle any more. A field that
              decides nothing is a field that misleads. */
-          field('API token', tokenInput, 'write-only; never displayed again')
+          field('API token', tokenInput)
         ]),
         el('div', { class: 'form-actions' }, saveBtn)
       ]);
@@ -7014,9 +8081,9 @@
           badgeHost.appendChild(d.configured
             ? el('span', { class: 'pill st-resolved', text: 'session active' })
             : el('span', { class: 'pill st-new', text: 'no session' }));
+          /* The badge above already says session active or not, so the grid carries only the mask. */
           statusHost.appendChild(metaGrid([
-            integrationRow('Session', d.configured ? 'stored' : 'not set'),
-            integrationRow('Masked', d.masked_session || '-')
+            integrationRow('Masked', d.masked_session || '—', 'mono')
           ]) || el('div', {}));
           drawSessionForm(d);
           if (d.configured) loadInvitations();
@@ -7066,14 +8133,13 @@
       });
 
       append(formHost, [
-        el('h3', { class: 'int-formtitle', text: d.configured ? 'Replace session' : 'Store session cookie' }),
-        el('div', { class: 'alert alert-info tiny' }, [
-          el('strong', { class: 'alert-title', text: 'Why a session cookie?' }),
-          el('div', { text:
-            'The REST API has no endpoints for invitations or collaborations. Those operations ' +
-            'use the GraphQL API at hackerone.com/graphql, which needs the __Host-session cookie ' +
-            'from a logged-in browser. Open DevTools > Application > Cookies on hackerone.com, ' +
-            'copy the __Host-session value, and paste it here. It typically lasts several weeks.' })
+        el('h3', { class: 'int-formtitle int-formtitle-info' }, [
+          el('span', { text: d.configured ? 'Replace session' : 'Store session cookie' }),
+          /* The old blue box moved into this badge: why a cookie, and where to get it. */
+          infoBadge('The REST API has no invitation or collaboration endpoints; those use '
+            + 'hackerone.com/graphql, which needs the __Host-session cookie from a logged-in '
+            + 'browser. Copy it from DevTools > Application > Cookies on hackerone.com and paste '
+            + 'it here. It typically lasts several weeks.')
         ]),
         errHost,
         el('div', { class: 'form-grid' }, [
@@ -7206,25 +8272,14 @@
   function integrationsView(root) {
     root.appendChild(el('div', { class: 'page-head' }, [
       el('div', {}, [
-        el('h1', { class: 'page-title', text: 'Integrations' }),
-        el('p', { class: 'page-sub',
-                  text: 'Outbound credentials and the syncs that use them. Secrets are write-only.' })
+        el('h1', { class: 'page-title', text: 'Integrations' })
       ])
     ]));
 
+    root.appendChild(el('div', { class: 'tab-eyebrow', text: 'Providers' }));
     var host = el('div', { class: 'intlist' });
     root.appendChild(host);
     INTEGRATIONS.forEach(function (p) { host.appendChild(p.card()); });
-
-    host.appendChild(el('section', { class: 'card card-skeleton' }, [
-      el('div', { class: 'card-title' }, [
-        el('span', { text: 'Another provider' }),
-        el('span', { class: 'pill pill-planned', text: 'slot' })
-      ]),
-      el('div', { class: 'pane-body tiny dim' },
-        'Each provider is one entry in the INTEGRATIONS array plus a card function that owns its ' +
-        'own status, credential form and actions. Nothing else has to change to add a second one.')
-    ]));
   }
 
   /* The research tools (Dashboard through Payloads) are the daily work. Everything an operator
@@ -7241,6 +8296,10 @@
     { view: 'dashboard', label: 'Dashboard' },
     { view: 'leads', label: 'Leads' },
     { view: 'reports', label: 'Tracker' },
+    /* Directly under the Tracker because it is the Tracker's back half: the same reports, after
+       they closed. Its rail glyph is R, which Reports does not take - that tab is labelled
+       Tracker. */
+    { view: 'regression', label: 'Regression' },
     { view: 'advisories', label: 'Advisories' },
     { view: 'programs', label: 'Programs' },
     { view: 'targets', label: 'Targets' },
@@ -7254,10 +8313,35 @@
     { view: 'settings', label: 'Settings' }
   ];
 
+  /* Line icons for the rail, one per view, stroked in currentColor so each follows its nav link's
+     colour (dim, or the accent when active) exactly like the brand gem and the cert seal. */
+  function navSvg(inner) {
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" ' +
+           'stroke-linecap="round" stroke-linejoin="round">' + inner + '</svg>';
+  }
+  var NAV_ICONS = {
+    dashboard: navSvg('<rect x="3" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5"/>'),
+    leads: navSvg('<path d="M5 21V4"/><path d="M5 4h12l-2.2 3.5L17 11H5"/>'),
+    reports: navSvg('<path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3.6 6h.01"/><path d="M3.6 12h.01"/><path d="M3.6 18h.01"/>'),
+    // A refresh loop: regression is the retest queue, shipped fixes looped back through to confirm.
+    regression: navSvg('<path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/>'),
+    advisories: navSvg('<path d="M12 3l7.5 3.3V11c0 4.2-3 7.3-7.5 8.7C7.5 18.3 4.5 15.2 4.5 11V6.3z"/><path d="M12 8.5v3.5"/><path d="M12 15.5h.01"/>'),
+    programs: navSvg('<path d="M12 3l8.5 4.6L12 12.2 3.5 7.6z"/><path d="M3.5 12.2L12 16.8l8.5-4.6"/>'),
+    targets: navSvg('<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/>'),
+    payloads: navSvg('<path d="M8.5 8l-4 4 4 4"/><path d="M15.5 8l4 4-4 4"/>'),
+    files: navSvg('<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>'),
+    tokens: navSvg('<circle cx="8" cy="14.5" r="3.5"/><path d="M10.5 12L19 3.5"/><path d="M15.5 7l2.5 2.5"/>'),
+    integrations: navSvg('<path d="M10.5 13.5a4 4 0 0 0 5.7 0l2-2a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M13.5 10.5a4 4 0 0 0-5.7 0l-2 2a4 4 0 0 0 5.7 5.7l1-1"/>'),
+    audit: navSvg('<path d="M5 6l1.4 1.4L9 4.8"/><path d="M5 12l1.4 1.4L9 10.8"/><path d="M5 18l1.4 1.4L9 16.8"/><path d="M12 6h8"/><path d="M12 12h8"/><path d="M12 18h8"/>'),
+    status: navSvg('<path d="M3 12h4l2.5 6 4-13 2.5 7H21"/>'),
+    settings: navSvg('<path d="M4 7h9"/><path d="M17 7h3"/><path d="M4 17h3"/><path d="M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="7" cy="17" r="2"/>')
+  };
+
   var VIEWS = {
     dashboard: function (root) { dashboardView(root); },
     leads: function (root, ctx) { entityListView(root, ENTITIES.leads, ctx); },
     reports: function (root, ctx) { entityListView(root, ENTITIES.reports, ctx); },
+    regression: function (root, ctx) { regressionView(root, ctx); },
     advisories: function (root, ctx) { entityListView(root, ENTITIES.advisories, ctx); },
     programs: function (root, ctx) { programsView(root, ctx); },
     targets: function (root, ctx) { targetsView(root, ctx); },
@@ -7336,15 +8420,19 @@
         nav.appendChild(el('div', { class: 'nav-heading navtext', text: item.heading }));
         return;
       }
+      var navKids = [];
+      /* Line icon in the expanded rail; the first-letter mark takes over when collapsed. */
+      if (NAV_ICONS[item.view]) {
+        navKids.push(el('span', { class: 'navicon', 'aria-hidden': 'true',
+                                  html: NAV_ICONS[item.view] }));
+      }
+      navKids.push(el('span', { class: 'navmark', text: item.label.charAt(0).toUpperCase() }));
+      navKids.push(el('span', { class: 'navtext', text: item.label }));
       nav.appendChild(el('a', {
         class: 'navlink' + (state.route.view === item.view ? ' active' : ''),
         href: '#/' + item.view,
         title: item.label
-      }, [
-        /* Shown only when collapsed, so the rail stays navigable without labels. */
-        el('span', { class: 'navmark', text: item.label.charAt(0).toUpperCase() }),
-        el('span', { class: 'navtext', text: item.label })
-      ]));
+      }, navKids));
     });
     /* Pushed to the bottom of the rail by margin-top:auto, so the version sits in the
        bottom-left corner regardless of how many nav items there are. The certificate page moved
@@ -7609,17 +8697,41 @@
   }
 
   function wireChrome() {
-    var themeBtn = $('#themebtn');
-    if (themeBtn) {
-      themeBtn.textContent = themeLabel(readTheme());
-      themeBtn.addEventListener('click', function () {
-        var order = ['auto', 'light', 'dark'];
-        var next = order[(order.indexOf(readTheme()) + 1) % order.length];
+    /* Account menu: one profile button opens a dropdown carrying the theme choice and log out; the
+       username (set by setUserChip on #userchip) sits at the top. */
+    var profileBtn = $('#profilebtn');
+    var dropdown = $('#profiledropdown');
+    if (profileBtn && dropdown) {
+      var closeMenu = function () { dropdown.hidden = true; profileBtn.setAttribute('aria-expanded', 'false'); };
+      profileBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var open = dropdown.hidden;
+        dropdown.hidden = !open;
+        profileBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      });
+      document.addEventListener('click', function (e) {
+        if (!dropdown.hidden && !dropdown.contains(e.target) && e.target !== profileBtn) closeMenu();
+      });
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeMenu(); });
+    }
+
+    var markActiveTheme = function () {
+      var cur = readTheme();
+      Array.prototype.forEach.call(document.querySelectorAll('.pd-theme'), function (b) {
+        var on = b.getAttribute('data-theme') === cur;
+        b.classList.toggle('on', on);
+        b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
+    };
+    Array.prototype.forEach.call(document.querySelectorAll('.pd-theme'), function (b) {
+      b.addEventListener('click', function () {
+        var next = b.getAttribute('data-theme');
         try { localStorage.setItem(THEME_KEY, next); } catch (e) { /* ignore */ }
         applyTheme(next);
-        themeBtn.textContent = themeLabel(next);
+        markActiveTheme();
       });
-    }
+    });
+    markActiveTheme();
 
     var logout = $('#logoutbtn');
     if (logout) {

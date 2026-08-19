@@ -8,6 +8,8 @@ Run:  python3 server.py            (reads config.json)
 See docs/app/ARCHITECTURE.md for the full stack description.
 """
 import argparse
+import bisect
+import datetime
 import getpass
 import html
 import io
@@ -18,6 +20,7 @@ import re
 import ssl
 import subprocess
 import sys
+import threading
 import time
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -25,7 +28,21 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import auth
 import common
 
-VERSION = "1.3.3"
+
+def _read_version():
+    """The single source of truth for the running version is the VERSION file at the repo root, so
+    the sidebar, /api/health and the startup banner always reflect the build actually shipped. A
+    hardcoded constant here drifted (it sat at 1.3.3 through several releases); reading the file
+    makes that impossible. Falls back to 0.0.0 only if the file is somehow absent, which reads as
+    an obviously-unidentified build rather than a wrong number."""
+    try:
+        with open(os.path.join(common.ROOT_DIR, "VERSION"), encoding="utf-8") as f:
+            return f.read().strip() or "0.0.0"
+    except OSError:
+        return "0.0.0"
+
+
+VERSION = _read_version()
 MAX_BODY = 64 * 1024 * 1024  # 64 MB ceiling on any request body
 COOKIE_MAX_AGE_NEVER = 10 * 365 * 24 * 3600  # see r_login: "never expires", in cookie terms
 
@@ -54,6 +71,13 @@ try:
     import screenshot as screenshot_mod
 except Exception:  # pragma: no cover
     screenshot_mod = None
+
+# Optional for the same reason: without it the Regression tab reports itself unavailable and the
+# rest of the console is untouched. It reads only rows the HackerOne sync already wrote.
+try:
+    import regression as regression_mod
+except Exception:  # pragma: no cover
+    regression_mod = None
 
 
 # ====================================================================== helpers
@@ -178,6 +202,10 @@ def r_stats(ctx, m):
                 % (ENTITIES[name]["table"], entity_scope(name))).fetchone()[0]
         except Exception:
             counts[name] = 0
+    # Feed the regression tile's number into `counts` so its sparkline ends on the same figure the
+    # tile prints, like every other overview tile. Computed once and reused for the tile below.
+    reg = _regression_summary(c, ctx.cfg)
+    counts["regression"] = reg.get("due", 0)
     return {
         # 'unknown' is excluded everywhere leads are counted, matching ENTITIES["leads"] above,
         # so the dashboard and the Leads tab never disagree on how many leads exist.
@@ -186,6 +214,10 @@ def r_stats(ctx, m):
         "leads_by_target": group(
             "SELECT t.slug, COUNT(*) FROM leads l LEFT JOIN targets t ON t.id=l.target_id"
             " WHERE " + LEAD_IS_REAL_L + " GROUP BY t.slug"),
+        # Leads bucketed by their research class (BAC, DoS, ...). Same real-lead filter as the other
+        # two lead breakdowns; classless leads are dropped rather than piling into a '(none)' bucket.
+        "leads_by_class": group(
+            "SELECT class, COUNT(*) FROM leads WHERE " + LEAD_IS_REAL + " AND class<>'' GROUP BY class"),
         # PAID reports bucketed by class - the ones that actually earned money, not every
         # submission. Not a plain GROUP BY: reports that came straight from the API have no
         # local file and so no class, and theirs is derived from the CWE HackerOne assigned.
@@ -208,6 +240,15 @@ def r_stats(ctx, m):
         "reports_by_state": group(
             "SELECT state, COUNT(*) FROM reports WHERE source='hackerone' GROUP BY state"),
         "counts": counts,
+        # Per-overview-entity cumulative-count series, so each dashboard tile can draw a sparkline
+        # of how its figure GREW to the count above. READ-ONLY: SELECTs of a timestamp column and
+        # a COUNT, nothing else - no bounty/money column is read or written here. Each series ends
+        # on the same number its tile prints (see _overview_sparklines).
+        "sparklines": _overview_sparklines(c, counts),
+        # The Regression tile: how many shipped fixes are due a look, and how many turned out not
+        # to hold. Derived from `reports`, so it costs one extra pass over the resolved rows and
+        # cannot fail on a database that has never synced - `summary` returns zeros.
+        "regression": reg,
         # The client seeds its "new" watermark from this. Without it the dashboard fell back to
         # the browser clock, which runs on a different machine and in a different format from
         # the indexed_at values the watermark is compared against.
@@ -216,6 +257,19 @@ def r_stats(ctx, m):
         # CAST is safe here because phantom non-numeric values are cleared on sync.
         "bounty": _bounty_stats(c),
     }
+
+
+def _regression_summary(c, cfg):
+    """The dashboard's regression numbers, or zeros. Never raises: the dashboard is the first page
+    every session lands on, and one optional tile must not be able to take /api/stats down."""
+    if regression_mod is None:
+        return {"due": 0, "broken": 0, "total": 0, "available": False}
+    try:
+        out = regression_mod.summary(c, cfg)
+        out["available"] = True
+        return out
+    except Exception:
+        return {"due": 0, "broken": 0, "total": 0, "available": False}
 
 
 def _reports_by_class(c):
@@ -261,6 +315,123 @@ def _bounty_stats(c):
         "open": one("SELECT COUNT(*) " + base + " AND state IN (%s)"
                     % ",".join("'%s' " % st for st in OPEN_REPORT_STATES)),
     }
+
+
+# ---------------------------------------------------------------- dashboard sparklines
+# A tiny cumulative-count series per overview entity, drawn as a sparkline under each dashboard
+# tile. Everything here is READ-ONLY: a SELECT of one timestamp column and a COUNT. No bounty or
+# money column is ever read or written, so the money invariant is untouched. Each series is built
+# from the timestamp the entity already carries and is pinned to END on the entity's live count,
+# so the last point of the line agrees with the number printed on the tile.
+SPARK_POINTS = 12
+
+
+def _spark_epoch(v):
+    """Best-effort epoch (float seconds) for a timestamp cell, or None.
+
+    Cells are either ISO-ish strings ('YYYY-MM-DDTHH:MM:SS', optionally with a trailing Z or an
+    offset, or a bare 'YYYY-MM-DD') or epoch floats (a filesystem mtime). The value is only used
+    to ORDER and BUCKET rows, so the exact zone does not matter - a consistent parse does.
+    """
+    if v is None:
+        return None
+    if isinstance(v, (int, float)):
+        return float(v)
+    s = str(v).strip()
+    if not s:
+        return None
+    # A bare epoch stored as text (mtime): digits with an optional single dot, no date punctuation.
+    if s.replace(".", "", 1).isdigit():
+        try:
+            return float(s)
+        except ValueError:
+            return None
+    s = s.replace(" ", "T")
+    core = s[:19] if len(s) >= 19 and s[10:11] == "T" else s[:10]
+    for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d"):
+        try:
+            return datetime.datetime.strptime(core, fmt).timestamp()
+        except ValueError:
+            continue
+    return None
+
+
+def _cumulative_series(stamps, total, points=SPARK_POINTS):
+    """A non-decreasing series of length `points`, ending EXACTLY at `total`.
+
+    `stamps` is the timestamp of each in-scope row. Rows whose timestamp is missing or unparseable
+    are folded into a constant baseline (treated as having existed from the start) so the line
+    still ends at `total`. When no row carries a usable timestamp - or every row shares one - the
+    series degrades to a smooth monotone ramp up to `total`, so the tile renders a rising line
+    rather than a flat one.
+    """
+    total = int(total or 0)
+    if points < 1:
+        points = 1
+    eps = sorted(e for e in (_spark_epoch(s) for s in stamps) if e is not None)
+    if len(eps) < 2 or eps[0] == eps[-1]:
+        if total <= 0:
+            return [0] * points
+        return [int(round(total * (i + 1) / points)) for i in range(points)]
+    lo, hi = eps[0], eps[-1]
+    span = (hi - lo) or 1.0
+    n = len(eps)
+    baseline = max(0, total - n)
+    out = []
+    for i in range(points):
+        edge = lo + span * (i + 1) / points
+        # Soften the SIGNAL above the undated-row baseline toward an even ramp, so a
+        # batch-import burst relaxes into a full-width rise instead of a flat line with
+        # a tail spike (the "hockey stick" the mockup never has). Blending only the
+        # above-baseline signal keeps the baseline a floor: undated rows still hold the
+        # line up from point zero, both terms stay non-decreasing, and it ends at total.
+        timed = bisect.bisect_right(eps, edge)
+        ramp = n * (i + 1) / points
+        out.append(int(round(baseline + 0.5 * timed + 0.5 * ramp)))
+    out[-1] = total  # pin the final point to the live count the tile prints
+    return out
+
+
+def _overview_sparklines(c, counts):
+    """{entity: [cumulative counts]} for the six dashboard overview tiles. Read-only, and every
+    query is wrapped so a missing table (a fresh or payload-only checkout) yields an empty series
+    that still renders as a flat baseline rather than taking the whole stats endpoint down."""
+    def stamps(sql):
+        try:
+            return [row[0] for row in c.execute(sql).fetchall()]
+        except Exception:
+            return []
+    out = {}
+    # Leads / reports / advisories reuse the SAME scope fragment as their tile count (entity_scope),
+    # so the series ends on the exact number the tile prints.
+    out["reports"] = _cumulative_series(
+        stamps("SELECT COALESCE(submitted_on, first_seen_at, indexed_at) FROM reports l WHERE "
+               + entity_scope("reports")),
+        counts.get("reports", 0))
+    out["leads"] = _cumulative_series(
+        stamps("SELECT COALESCE(indexed_at, mtime) FROM leads l WHERE " + entity_scope("leads")),
+        counts.get("leads", 0))
+    out["advisories"] = _cumulative_series(
+        stamps("SELECT COALESCE(published, first_seen_at, indexed_at) FROM advisories l WHERE "
+               + entity_scope("advisories")),
+        counts.get("advisories", 0))
+    out["programs"] = _cumulative_series(
+        stamps("SELECT COALESCE(updated_at, synced_at) FROM programs"),
+        counts.get("programs", 0))
+    # The Targets tile counts SCOPES (see the tiles array in app.js), so its series is over scopes.
+    out["scopes"] = _cumulative_series(
+        stamps("SELECT synced_at FROM scopes"),
+        counts.get("scopes", 0))
+    out["payloads"] = _cumulative_series(
+        stamps("SELECT indexed_at FROM payloads"),
+        counts.get("payloads", 0))
+    # The Retests-due tile has no timeline of its own (the queue is derived, not a table), so its
+    # line is a smooth ramp to the current due count rather than a reconstructed history. Still a
+    # rising line like the others, ending on the exact number the tile prints. Passing real stamps
+    # here would be wrong: their count is the resolved-report pool, not the due count, and the two
+    # disagreeing makes _cumulative_series non-monotone.
+    out["regression"] = _cumulative_series([], counts.get("regression", 0))
+    return out
 
 
 # ---------------------------------------------------------------- entities
@@ -467,7 +638,7 @@ def r_list(ctx, m):
     sort = ctx.q("sort", "")
     order = " ORDER BY " + tiebreak
     if sort:
-        col = re.sub(r"[^a-zA-Z_]", "", sort.lstrip("-"))
+        col = re.sub(r"[^a-zA-Z0-9_]", "", sort.lstrip("-"))
         if col:
             # Money is stored as TEXT, so a plain ORDER BY compares it lexically and '750.0' sorts
             # above '[amount]' - the Programs tab listed a [amount] program ahead of a [amount] one. The
@@ -1926,6 +2097,10 @@ def r_schedule_set(ctx, m):
 SETTINGS_FIELDS = {
     # key -> (type, minimum, maximum). 0 is in range for session_hours and means "never expires".
     "session_hours": (int, 0, 24 * 365),
+    # Days after a report closes before the Regression tab calls its fix due a retest. Not zero:
+    # a window of zero makes every resolved report permanently due, which is the same as having no
+    # queue at all. See regression.window_days, which clamps to the same range.
+    "regression_window_days": (int, 1, 3650),
 }
 
 
@@ -1934,6 +2109,10 @@ def _settings_payload(cfg):
     return {
         "session_hours": hours,
         "session_expiry_enabled": hours > 0,
+        # Read through the module so the value the Settings tab shows is the CLAMPED one actually
+        # in force, not whatever integer happens to be sitting in config.json.
+        "regression_window_days": (regression_mod.window_days(cfg) if regression_mod
+                                   else int(cfg.get("regression_window_days", 30) or 30)),
         # Said here rather than only in the UI copy, so anyone reading the API sees the trade.
         "session_note": ("With expiry off the login cookie stays valid until you log out. This "
                          "app binds to loopback and holds unreported findings, so that is a "
@@ -2166,19 +2345,76 @@ def r_h1_test(ctx, m):
         raise HttpError(502, str(e))
 
 
+# The H1 sync runs in the background so the request returns at once and the page polls progress,
+# rather than holding one request open for the ~1 minute a full two-phase sync takes. One operator,
+# so a single module-level state is enough; the lock guards the worker thread's writes to it.
+_H1_SYNC = {"running": False, "phase": "idle", "done": 0, "total": 0,
+            "result": None, "error": None, "started_at": 0.0, "finished_at": 0.0}
+_H1_SYNC_LOCK = threading.Lock()
+
+
+def _run_h1_sync(program_handle, user, remote):
+    """Worker with its OWN connection (a sqlite handle cannot cross threads), publishing progress
+    into _H1_SYNC. h1.sync does not commit, so we commit here, exactly as the request framework did
+    for the old synchronous endpoint - otherwise the whole sync (bounties included) is lost."""
+    conn = common.connect()
+    t0 = time.time()
+    try:
+        def cb(done, total):
+            with _H1_SYNC_LOCK:
+                _H1_SYNC["phase"] = "enriching"
+                _H1_SYNC["done"] = done
+                _H1_SYNC["total"] = total
+        res = h1_mod.sync(conn, verbose=False, program_handle=program_handle, progress=cb)
+        res["elapsed_ms"] = int((time.time() - t0) * 1000)
+        try:
+            common.audit(conn, user, "h1_sync", detail=json.dumps(res), remote=remote)
+        except Exception:
+            pass
+        conn.commit()
+        with _H1_SYNC_LOCK:
+            _H1_SYNC["result"] = res
+            _H1_SYNC["phase"] = "done"
+            _H1_SYNC["total"] = res.get("fetched", _H1_SYNC["total"]) or _H1_SYNC["total"]
+            _H1_SYNC["done"] = _H1_SYNC["total"]
+    except Exception as e:
+        with _H1_SYNC_LOCK:
+            _H1_SYNC["error"] = str(e)
+            _H1_SYNC["phase"] = "error"
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+        with _H1_SYNC_LOCK:
+            _H1_SYNC["running"] = False
+            _H1_SYNC["finished_at"] = time.time()
+
+
 @route("POST", r"/api/integrations/hackerone/sync", scope="write")
 def r_h1_sync(ctx, m):
     if not h1_mod:
         raise HttpError(503, "hackerone module unavailable")
-    t0 = time.time()
-    try:
-        res = h1_mod.sync(ctx.conn, verbose=False,
-                          program_handle=(ctx.body or {}).get("program_handle"))
-    except h1_mod.H1Error as e:
-        raise HttpError(502, str(e))
-    res["elapsed_ms"] = int((time.time() - t0) * 1000)
-    common.audit(ctx.conn, ctx.user, "h1_sync", detail=json.dumps(res), remote=ctx.remote)
-    return res
+    u, t, _ = h1_mod.get_credentials()
+    if not (u and t):
+        raise HttpError(400, "no HackerOne credential stored")
+    with _H1_SYNC_LOCK:
+        if _H1_SYNC["running"]:
+            return dict(_H1_SYNC)          # already in flight; the page just polls the status route
+        _H1_SYNC.update({"running": True, "phase": "listing", "done": 0, "total": 0,
+                         "result": None, "error": None,
+                         "started_at": time.time(), "finished_at": 0.0})
+    handle = (ctx.body or {}).get("program_handle")
+    threading.Thread(target=_run_h1_sync, args=(handle, ctx.user, ctx.remote),
+                     daemon=True).start()
+    return {"started": True, "running": True}
+
+
+@route("GET", r"/api/integrations/hackerone/sync/status")
+def r_h1_sync_status(ctx, m):
+    """Progress for the in-flight (or last) H1 sync, so the Integrations page can draw a bar."""
+    with _H1_SYNC_LOCK:
+        return dict(_H1_SYNC)
 
 
 # The accessible-programs list is 6+ paged requests, so it is cached in memory for a few minutes:
@@ -2541,6 +2777,136 @@ def r_hacktivity_refresh(ctx, m):
     return out
 
 
+# ------------------------------------------------------------------ regression
+# The queue over shipped fixes. Every one of these reads or writes rows that are already local -
+# `reports` for the candidates, `regressions` for the verdicts - so none of them can be slowed
+# down, rate-limited or made to fail by HackerOne being unreachable.
+def _regression_mod():
+    """The module or a 503. Every route below opens with this, so a checkout missing the module
+    answers honestly on the tab instead of 500ing somewhere deeper."""
+    if regression_mod is None:
+        raise HttpError(503, "regression module unavailable")
+    return regression_mod
+
+
+@route("GET", r"/api/regression")
+def r_regression(ctx, m):
+    """The queue, its bucket counts and the window in force."""
+    mod = _regression_mod()
+    return mod.queue(ctx.conn, ctx.cfg,
+                     bucket=ctx.q("bucket", "due"),
+                     program=ctx.q("program", ""),
+                     q=ctx.q("q", ""),
+                     limit=ctx.q("limit", 200),
+                     offset=ctx.q("offset", 0))
+
+
+@route("GET", r"/api/regression/(\d+)")
+def r_regression_detail(ctx, m):
+    """One entry with the original report body and the triage thread attached.
+
+    The thread is the point: it is where the program said what it changed, and deciding what to
+    re-test without re-reading it is guesswork. Served from the local row, so it is only as current
+    as the last `h1.py --sync`.
+    """
+    mod = _regression_mod()
+    item = mod.detail(ctx.conn, m.group(1), ctx.cfg)
+    if item is None:
+        raise HttpError(404, "no resolved report #%s in this database" % m.group(1))
+    return item
+
+
+@route("POST", r"/api/regression/(\d+)/verdict", scope="write")
+def r_regression_verdict(ctx, m):
+    """Record what a retest found: holds, broken, skipped - or pending to clear a misclick."""
+    mod = _regression_mod()
+    h1_id = m.group(1)
+    body = ctx.body or {}
+    verdict = (body.get("verdict") or "").strip().lower()
+    note = body.get("note")
+    before = mod.detail(ctx.conn, h1_id, ctx.cfg)
+    if before is None:
+        raise HttpError(404, "no resolved report #%s in this database" % h1_id)
+    try:
+        out = mod.set_verdict(ctx.conn, h1_id, verdict, note=note)
+    except ValueError as e:
+        raise HttpError(400, str(e))
+    common.audit(ctx.conn, ctx.user, "regression_verdict", "reports", None,
+                 "#%s %s -> %s" % (h1_id, before.get("verdict"), verdict), ctx.remote)
+    return out
+
+
+@route("POST", r"/api/regression/(\d+)/snooze", scope="write")
+def r_regression_snooze(ctx, m):
+    """Push the due date out, or clear the override and fall back to the window."""
+    mod = _regression_mod()
+    h1_id = m.group(1)
+    body = ctx.body or {}
+    try:
+        if body.get("clear"):
+            out = mod.clear_snooze(ctx.conn, h1_id)
+        else:
+            out = mod.snooze(ctx.conn, h1_id, days=body.get("days"), due_on=body.get("due_on"))
+    except ValueError as e:
+        raise HttpError(400, str(e))
+    if out is None:
+        raise HttpError(404, "no resolved report #%s in this database" % h1_id)
+    common.audit(ctx.conn, ctx.user, "regression_snooze", "reports", None,
+                 "#%s due %s" % (h1_id, out.get("due_on")), ctx.remote)
+    return out
+
+
+@route("POST", r"/api/regression/(\d+)/lead", scope="write")
+def r_regression_lead(ctx, m):
+    """Draft the bypass lead for a fix that did not hold, and file it in a target's workspace.
+
+    Same contract as POST /api/leads - write the file, then re-index that one file - because the
+    markdown is the record and the row is the index of it. What this adds is the pre-fill: the
+    original report id, its close date, its asset, its CWE and the retest note, which are the
+    fields a bypass lead would otherwise be re-typed from the Tracker.
+
+    The lead is deliberately NOT written for any other verdict. A lead is a claim that something is
+    wrong, and drafting one for a fix that holds would put a false finding in the queue.
+    """
+    mod = _regression_mod()
+    h1_id = m.group(1)
+    item = mod.detail(ctx.conn, h1_id, ctx.cfg)
+    if item is None:
+        raise HttpError(404, "no resolved report #%s in this database" % h1_id)
+    if item.get("verdict") != "broken":
+        raise HttpError(400, "record a 'broken' verdict first; a lead states that a fix failed")
+
+    b = ctx.body or {}
+    target = (b.get("target") or "").strip()
+    ws = _target_workspace(ctx.conn, target) if target else None
+    if not ws:
+        raise HttpError(400, "unknown or missing target; pick the workspace to file the lead in")
+    # The report's own class where the CWE maps to one, and NOT common.UNCLASSED when it does not:
+    # that is a display label, and a literal `Unclassified/` directory in the workspace would be a
+    # class invented by a fallback. A lead with no class lands in the workspace's own notes/, which
+    # is exactly what ingest.classify_path expects.
+    klass = (b.get("class") or "").strip() or common.class_for_report(item)
+    if klass == common.UNCLASSED:
+        klass = None
+
+    folder = os.path.join(ws, klass, "notes") if klass else os.path.join(ws, "notes")
+    fname = common.slugify("%s-fix-bypass-%s" % (h1_id, item.get("title") or "")) + ".md"
+    dest = common.safe_under(ws, os.path.join(folder, fname))
+    if not dest:
+        raise HttpError(400, "resolved path escapes the workspace")
+    if os.path.exists(dest):
+        raise HttpError(409, "file already exists: " + dest)
+
+    common.write_text_atomic(dest, mod.lead_markdown(item, researcher=ctx.user or ""))
+    _reindex(ctx.conn, dest)
+    mod.record_lead(ctx.conn, h1_id, dest)
+    common.audit(ctx.conn, ctx.user, "regression_lead", "leads", None,
+                 "#%s -> %s" % (h1_id, dest), ctx.remote)
+    out = mod.detail(ctx.conn, h1_id, ctx.cfg)
+    out["lead_path"] = dest
+    return out
+
+
 @route("GET", r"/api/status")
 def r_status(ctx, m):
     """Everything the Status tab needs, in one request.
@@ -2553,6 +2919,9 @@ def r_status(ctx, m):
     out["integration"] = h1_mod.status(ctx.conn) if h1_mod else {"configured": False}
     out["poller"] = h1_watch_mod.status(ctx.conn) if h1_watch_mod else None
     out["hacktivity"] = hacktivity_mod.status(ctx.conn) if hacktivity_mod else None
+    # No job, no credential and no request, so there is no run history to report: the only honest
+    # health signal for the regression queue is how much of it has ever been looked at.
+    out["regression"] = regression_mod.status(ctx.conn, ctx.cfg) if regression_mod else None
 
     # Advisory feed freshness. The Audit Log already warns past 24h; the number belongs here too.
     def one(sql, default=None):

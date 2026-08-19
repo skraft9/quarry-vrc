@@ -76,14 +76,34 @@
 
     <form id="globalsearch" class="globalsearch" role="search">
       <label class="sr-only" for="globalsearch-input">Search everything</label>
-      <input id="globalsearch-input" type="search" placeholder="Search everything&hellip;  (press /)" autocomplete="off" spellcheck="false">
-      <button class="btn btn-quiet" type="submit">Search</button>
+      <span class="gs-field">
+        <span class="gs-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.2-3.2"/></svg></span>
+        <input id="globalsearch-input" type="search" placeholder="Search everything&hellip;" autocomplete="off" spellcheck="false">
+        <span class="gs-key" aria-hidden="true">/</span>
+      </span>
+      <!-- Kept for the phone layout, where Enter is awkward; hidden on desktop, where the field
+           submits on Enter and the mockup shows only the "/" keycap. -->
+      <button class="btn btn-quiet gs-submit" type="submit">Search</button>
     </form>
 
     <div class="topbar-right">
-      <span id="userchip" class="userchip" title="Signed in user"></span>
-      <button id="themebtn" class="btn btn-quiet" type="button" title="Cycle theme: auto / light / dark">Theme</button>
-      <button id="logoutbtn" class="btn btn-quiet" type="button">Log out</button>
+      <div class="profilemenu">
+        <button id="profilebtn" class="profilebtn" type="button" aria-haspopup="true" aria-expanded="false" title="Account">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-3.4 3.6-6 8-6s8 2.6 8 6"/></svg>
+        </button>
+        <div id="profiledropdown" class="profiledropdown" role="menu" hidden>
+          <div class="pd-user"><span id="userchip"></span></div>
+          <div class="pd-sep"></div>
+          <div class="pd-grouplabel">Theme</div>
+          <div class="pd-themes">
+            <button class="pd-theme" type="button" data-theme="auto">Auto</button>
+            <button class="pd-theme" type="button" data-theme="light">Light</button>
+            <button class="pd-theme" type="button" data-theme="dark">Dark</button>
+          </div>
+          <div class="pd-sep"></div>
+          <button id="logoutbtn" class="pd-item pd-logout" type="button">Log out</button>
+        </div>
+      </div>
     </div>
   </header>
 
