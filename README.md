@@ -38,7 +38,7 @@
 
 - **HackerOne**
 
-Quarry syncs and submits through the HackerOne API. Other platforms are not supported yet.
+Other platforms are not supported.
 
 <img src="docs/img/rule.svg" alt="" width="100%">
 
