@@ -78,5 +78,22 @@ python3 /app/core/ingest.py --rebuild || true
 # server binding its port; the rebuild is idempotent and self-heals on the next start.
 ( /app/scripts/sync-payloads.sh "$PAYLOADS_DIR" || true ) &
 
+# 7. Incremental HackerOne poll on a timer, in the background, so the Tracker's live report-update
+# monitoring works out of the box with no host cron to set up. Best-effort: a poll fired before a
+# HackerOne credential is configured just no-ops and is retried on the next tick. Set
+# QUARRY_POLL_MINUTES=0 to turn the built-in timer off (for example, to drive the poll from an
+# external scheduler instead).
+POLL_MINUTES="${QUARRY_POLL_MINUTES:-15}"
+case "$POLL_MINUTES" in ''|*[!0-9]*) POLL_MINUTES=0 ;; esac
+if [ "$POLL_MINUTES" -gt 0 ]; then
+  echo "incremental poll timer: every ${POLL_MINUTES} min (QUARRY_POLL_MINUTES=0 to disable)"
+  (
+    while true; do
+      sleep "$((POLL_MINUTES * 60))"
+      python3 /app/core/h1_watch.py --poll --quiet >> "$DATA_DIR/h1-cron.log" 2>&1 || true
+    done
+  ) &
+fi
+
 echo "Quarry VRC starting on https://0.0.0.0:${PORT}/ (published)"
 exec python3 /app/core/server.py

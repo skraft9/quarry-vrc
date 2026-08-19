@@ -757,18 +757,23 @@ signals the list endpoint returns for free and detail-fetches only the reports w
   docker compose exec quarry python3 core/h1_watch.py --poll
   ```
 
-**Run it on a schedule.** The container does not schedule the poll for you, so add a cron entry on
-the host. From the directory that holds your `docker-compose.yml`, run `crontab -e` and add:
+**It runs automatically.** The container polls on a built-in timer, every **15 minutes** by default,
+so the Tracker's live monitoring works out of the box with nothing to set up. Tune or disable it
+with an environment variable in your `.env` or compose file:
 
-```cron
-# every 15 minutes; --quiet prints nothing on success, so an empty log is the healthy case
-*/15 * * * * cd /path/to/quarry-vrc && docker compose exec -T quarry python3 core/h1_watch.py --poll --quiet >> h1-cron.log 2>&1
+```env
+QUARRY_POLL_MINUTES=15   # interval in minutes; 0 turns the built-in timer off
 ```
 
-The `-T` disables the pseudo-TTY so it runs headless under cron. The **Status** tab's Incremental
-Poll card then reads healthy and shows the last run, the cumulative request count, and how many
-changes are unread. Poll activity is recorded in the app and the Audit log, not in that log file, so
-an empty `h1-cron.log` is the expected, healthy state.
+The **Status** tab's Incremental Poll card then reads healthy and shows the last run, the cumulative
+request count, and how many changes are unread. Poll activity is recorded in the app and the Audit
+log, not in a file, so the `h1-cron.log` it writes stays empty on success (the poll runs `--quiet`).
+
+If you would rather run your own scheduler, set `QUARRY_POLL_MINUTES=0` and add a host cron:
+
+```cron
+*/15 * * * * cd /path/to/quarry-vrc && docker compose exec -T quarry python3 core/h1_watch.py --poll --quiet >> h1-cron.log 2>&1
+```
 
 ---
 

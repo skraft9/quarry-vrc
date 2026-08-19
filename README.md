@@ -157,6 +157,7 @@ container can health-check itself; neither is a language dependency.)
 | `QUARRY_PORT` | Host port the HTTPS console is published on. Default `8443`. |
 | `QUARRY_ALLOWLIST` | **Client IP allow-list**, checked before auth on every request. Comma-separated IPs/CIDRs. Empty = open, which is fine for a host only you can reach. |
 | `QUARRY_TLS_MODE` | `self-signed` (default) generates a local CA + cert on first boot; `mounted` uses a cert/key you mount into the data volume. |
+| `QUARRY_POLL_MINUTES` | Interval (minutes) for the built-in incremental HackerOne poll that keeps the Tracker current between full syncs. Default `15`; `0` disables the timer to run your own scheduler. |
 
 <img src="docs/img/rule-triple.svg" alt="" width="100%">
 
